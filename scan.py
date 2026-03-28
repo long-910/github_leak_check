@@ -61,6 +61,16 @@ def is_safe(email: str) -> bool:
     return any(p.search(email) for p in SAFE_PATTERNS)
 
 
+class RateLimitExceeded(Exception):
+    """Raised when the required rate-limit wait exceeds the configured threshold."""
+    def __init__(self, wait_seconds: float):
+        self.wait_seconds = wait_seconds
+        super().__init__(
+            f"Rate limit requires waiting {wait_seconds:.0f}s "
+            f"(exceeds --max-rate-wait). Stopping to avoid wasting CI minutes."
+        )
+
+
 def redact(email: str) -> str:
     """Partially redact an email for safe display in logs/summaries."""
     try:
@@ -76,7 +86,7 @@ def redact(email: str) -> str:
 class GitHubClient:
     API_BASE = "https://api.github.com"
 
-    def __init__(self, token: Optional[str] = None):
+    def __init__(self, token: Optional[str] = None, max_rate_wait: int = 300):
         self.session = requests.Session()
         self.session.headers.update({
             "Accept": "application/vnd.github+json",
@@ -84,6 +94,21 @@ class GitHubClient:
         })
         if token:
             self.session.headers["Authorization"] = f"Bearer {token}"
+        # If a rate-limit sleep would exceed this many seconds, raise RateLimitExceeded.
+        self.max_rate_wait = max_rate_wait
+
+    def _wait_for_rate_limit(self, resp) -> None:
+        """Check response for rate limiting. Sleep or raise RateLimitExceeded."""
+        if resp.status_code == 429 or (
+            resp.status_code == 403
+            and resp.headers.get("X-RateLimit-Remaining") == "0"
+        ):
+            reset = int(resp.headers.get("X-RateLimit-Reset", time.time() + 60))
+            wait = max(reset - time.time(), 0) + 2
+            if wait > self.max_rate_wait:
+                raise RateLimitExceeded(wait)
+            _log(f"  Rate limited. Waiting {wait:.0f}s...")
+            time.sleep(wait)
 
     def _get(self, url: str, params: Optional[dict] = None) -> dict | list:
         if not url.startswith("http"):
@@ -97,14 +122,8 @@ class GitHubClient:
                 time.sleep(2 ** attempt)
                 continue
 
-            if resp.status_code == 429 or (
-                resp.status_code == 403
-                and resp.headers.get("X-RateLimit-Remaining") == "0"
-            ):
-                reset = int(resp.headers.get("X-RateLimit-Reset", time.time() + 60))
-                wait = max(reset - time.time(), 0) + 2
-                _log(f"  Rate limited. Waiting {wait:.0f}s...")
-                time.sleep(wait)
+            if resp.status_code in (429, 403):
+                self._wait_for_rate_limit(resp)
                 continue
 
             if resp.status_code == 404:
@@ -126,12 +145,8 @@ class GitHubClient:
             resp = self.session.get(url, params=params, timeout=30)
             if resp.status_code in (404, 409):
                 return
-            if resp.status_code == 429 or (
-                resp.status_code == 403
-                and resp.headers.get("X-RateLimit-Remaining") == "0"
-            ):
-                reset = int(resp.headers.get("X-RateLimit-Reset", time.time() + 60))
-                time.sleep(max(reset - time.time(), 0) + 2)
+            if resp.status_code in (429, 403):
+                self._wait_for_rate_limit(resp)
                 continue
             resp.raise_for_status()
             data = resp.json()
@@ -438,6 +453,16 @@ Output files:
         help="Also scan forked repositories (excluded by default).",
     )
     parser.add_argument(
+        "--max-rate-wait",
+        type=int,
+        default=300,
+        metavar="SECONDS",
+        help=(
+            "Maximum seconds to wait when rate limited before aborting (default: 300). "
+            "In CI, set low (e.g. 60) so the job cancels instead of idling."
+        ),
+    )
+    parser.add_argument(
         "--output-dir",
         default="results",
         metavar="DIR",
@@ -494,7 +519,7 @@ Output files:
         if not since:
             _print("No previous scan found: scanning all commits.")
 
-    client = GitHubClient(token=args.token)
+    client = GitHubClient(token=args.token, max_rate_wait=args.max_rate_wait)
     scanner = LeakScanner(
         client,
         max_commits=args.max_commits,
@@ -506,6 +531,27 @@ Output files:
 
     try:
         result = scanner.run(username)
+    except RateLimitExceeded as exc:
+        _print(f"\n⏱  {exc}")
+        _print("Saving partial results and exiting with code 2 (rate limited).")
+        partial_summary = {
+            "username": username,
+            "scanned_at": datetime.now(timezone.utc).isoformat(),
+            "since": since,
+            "repos_scanned": scanner.stats["repos_scanned"],
+            "commits_scanned": scanner.stats["commits_scanned"],
+            "files_scanned": scanner.stats["files_scanned"],
+            "leak_count": len(scanner.leaks),
+            "leak_by_surface": {},
+            "status": "RATE_LIMITED",
+            "rate_limit_wait_needed": exc.wait_seconds,
+        }
+        out_dir = Path(args.output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "summary.json").write_text(
+            json.dumps(partial_summary, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        sys.exit(2)
     except Exception as exc:
         _print(f"ERROR: {exc}")
         result = {

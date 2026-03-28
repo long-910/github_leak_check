@@ -153,6 +153,14 @@ def generate(summary: dict) -> str:
         leaks_color  = "#f85149"
         status_label = f"LEAKS FOUND  \u26a0"
         pulse_anim   = PULSE_ANIM
+    elif status == "RATE_LIMITED":
+        color_start = "#6e40c9"
+        color_end   = "#8957e5"
+        badge_fill   = "#6e40c9"
+        badge_stroke = "#8957e5"
+        leaks_color  = "#8957e5"
+        status_label = "RATE LIMITED"
+        pulse_anim   = ""
     else:  # ERROR or UNKNOWN
         color_start = "#9e6a03"
         color_end   = "#d29922"
