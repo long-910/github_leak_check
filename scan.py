@@ -156,8 +156,11 @@ class GitHubClient:
     def get_repos(self, username: str) -> Generator:
         yield from self.paginate(f"/users/{username}/repos", {"type": "owner"})
 
-    def get_commits(self, repo: str) -> Generator:
-        yield from self.paginate(f"/repos/{repo}/commits")
+    def get_commits(self, repo: str, since: Optional[str] = None) -> Generator:
+        params = {}
+        if since:
+            params["since"] = since
+        yield from self.paginate(f"/repos/{repo}/commits", params)
 
     def get_tree(self, repo: str, sha: str) -> list:
         data = self._get(f"/repos/{repo}/git/trees/{sha}", {"recursive": "1"})
@@ -193,6 +196,7 @@ class LeakScanner:
         max_commits: int = 500,
         scan_files: bool = True,
         target_emails: Optional[set[str]] = None,
+        since: Optional[str] = None,
     ):
         self.client = client
         self.max_commits = max_commits
@@ -201,6 +205,8 @@ class LeakScanner:
         self.target_emails: Optional[set[str]] = (
             {e.lower() for e in target_emails} if target_emails else None
         )
+        # ISO 8601 timestamp; only commits after this date are scanned.
+        self.since = since
         self.leaks: list[dict] = []
         self.stats = {
             "repos_scanned": 0,
@@ -235,7 +241,7 @@ class LeakScanner:
     def scan_commits(self, repo_name: str):
         count = 0
         seen: set[str] = set()
-        for commit in self.client.get_commits(repo_name):
+        for commit in self.client.get_commits(repo_name, since=self.since):
             if count >= self.max_commits:
                 break
             count += 1
@@ -329,6 +335,7 @@ class LeakScanner:
         summary = {
             "username": username,
             "scanned_at": datetime.now(timezone.utc).isoformat(),
+            "since": self.since,
             "target_emails": sorted(self.target_emails) if self.target_emails else None,
             "repos_scanned": self.stats["repos_scanned"],
             "commits_scanned": self.stats["commits_scanned"],
@@ -403,6 +410,21 @@ Output files:
         help="Skip file content scanning (faster)",
     )
     parser.add_argument(
+        "--since",
+        default=None,
+        metavar="DATETIME",
+        help=(
+            "Only scan commits after this ISO 8601 datetime "
+            "(e.g. 2026-01-01T00:00:00Z). "
+            "Defaults to scanned_at from the previous summary.json."
+        ),
+    )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Ignore previous scan time and scan all commits.",
+    )
+    parser.add_argument(
         "--output-dir",
         default="results",
         metavar="DIR",
@@ -439,12 +461,33 @@ Output files:
     else:
         _print(f"Scanning @{username} for all non-noreply email leaks...")
 
+    # Determine incremental scan start time
+    since: Optional[str] = None
+    if args.full:
+        _print("--full specified: scanning all commits.")
+    elif args.since:
+        since = args.since
+        _print(f"Scanning commits after: {since}  (--since)")
+    else:
+        summary_path = Path(args.output_dir) / "summary.json"
+        if summary_path.exists():
+            try:
+                prev = json.loads(summary_path.read_text(encoding="utf-8"))
+                since = prev.get("scanned_at")
+                if since:
+                    _print(f"Scanning commits after: {since}  (previous scan)")
+            except Exception:
+                pass
+        if not since:
+            _print("No previous scan found: scanning all commits.")
+
     client = GitHubClient(token=args.token)
     scanner = LeakScanner(
         client,
         max_commits=args.max_commits,
         scan_files=not args.no_files,
         target_emails=target_emails,
+        since=since,
     )
 
     try:
