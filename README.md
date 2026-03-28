@@ -69,9 +69,15 @@ Replace `USERNAME` with your actual GitHub username.
 
 ## Run locally
 
+First, install dependencies:
+
 ```bash
 pip install -r requirements.txt
+```
 
+### macOS / Linux
+
+```bash
 # Scan (replace with your username and token)
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --verbose
 
@@ -83,6 +89,32 @@ GH_PAT=ghp_... python scan.py YOUR_USERNAME --no-files
 
 # Increase commit depth (default: 500 per repo)
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --max-commits 2000
+```
+
+### Windows — PowerShell
+
+```powershell
+# Scan
+$env:GH_PAT = "ghp_..."
+python scan.py YOUR_USERNAME --verbose
+
+# Generate card
+python generate_card.py
+
+# Scan without file content (faster)
+python scan.py YOUR_USERNAME --no-files
+
+# Increase commit depth
+python scan.py YOUR_USERNAME --max-commits 2000
+```
+
+### Windows — Command Prompt (cmd.exe)
+
+```cmd
+set GH_PAT=ghp_...
+python scan.py YOUR_USERNAME --verbose
+
+python generate_card.py
 ```
 
 ---

@@ -69,9 +69,15 @@ Fork 到你自己的账号，这样 GitHub Actions 将以你的身份运行。
 
 ## 本地运行
 
+首先安装依赖：
+
 ```bash
 pip install -r requirements.txt
+```
 
+### macOS / Linux
+
+```bash
 # 扫描（替换为你的用户名和 Token）
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --verbose
 
@@ -83,6 +89,32 @@ GH_PAT=ghp_... python scan.py YOUR_USERNAME --no-files
 
 # 增加每仓库的提交扫描深度（默认：500）
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --max-commits 2000
+```
+
+### Windows — PowerShell
+
+```powershell
+# 扫描
+$env:GH_PAT = "ghp_..."
+python scan.py YOUR_USERNAME --verbose
+
+# 生成卡片
+python generate_card.py
+
+# 跳过文件内容扫描（更快）
+python scan.py YOUR_USERNAME --no-files
+
+# 增加提交扫描深度
+python scan.py YOUR_USERNAME --max-commits 2000
+```
+
+### Windows — 命令提示符（cmd.exe）
+
+```cmd
+set GH_PAT=ghp_...
+python scan.py YOUR_USERNAME --verbose
+
+python generate_card.py
 ```
 
 ---

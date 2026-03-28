@@ -69,9 +69,15 @@ Actions タブから手動でトリガーすることも可能です。
 
 ## ローカルで実行
 
+まず依存パッケージをインストールします：
+
 ```bash
 pip install -r requirements.txt
+```
 
+### macOS / Linux
+
+```bash
 # スキャン（ユーザー名とトークンを置き換えてください）
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --verbose
 
@@ -83,6 +89,32 @@ GH_PAT=ghp_... python scan.py YOUR_USERNAME --no-files
 
 # コミットスキャン深度を増やす（デフォルト：500件/リポジトリ）
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --max-commits 2000
+```
+
+### Windows — PowerShell
+
+```powershell
+# スキャン
+$env:GH_PAT = "ghp_..."
+python scan.py YOUR_USERNAME --verbose
+
+# カードを生成
+python generate_card.py
+
+# ファイルスキャンをスキップ（高速化）
+python scan.py YOUR_USERNAME --no-files
+
+# コミットスキャン深度を増やす
+python scan.py YOUR_USERNAME --max-commits 2000
+```
+
+### Windows — コマンドプロンプト（cmd.exe）
+
+```cmd
+set GH_PAT=ghp_...
+python scan.py YOUR_USERNAME --verbose
+
+python generate_card.py
 ```
 
 ---
