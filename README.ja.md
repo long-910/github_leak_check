@@ -26,7 +26,44 @@ GitHub のコミット履歴・ファイル内容・プロフィールから `no
 
 ---
 
-## セットアップ
+## GitHub Action として使う
+
+任意のリポジトリのワークフローに2行で組み込めます：
+
+```yaml
+- uses: actions/checkout@v4
+
+- name: メール漏洩スキャン
+  uses: long-910/github_leak_check@v1
+  with:
+    github-token: ${{ secrets.GH_PAT }}
+```
+
+### 全入力パラメータ
+
+| パラメータ | 必須 | デフォルト | 説明 |
+|---|---|---|---|
+| `github-token` | 必須 | — | `repo` + `read:user` スコープの PAT |
+| `username` | 任意 | リポジトリオーナー | スキャン対象の GitHub ユーザー名 |
+| `target-emails` | 任意 | _(すべて)_ | 監視するアドレス（カンマ区切り） |
+| `max-commits` | 任意 | `500` | リポジトリごとの最大スキャンコミット数 |
+| `include-forks` | 任意 | `false` | フォークリポジトリも含める |
+| `no-files` | 任意 | `false` | ファイル内容スキャンをスキップ |
+| `full-scan` | 任意 | `false` | 前回のスキャン時刻を無視して全スキャン |
+| `max-rate-wait` | 任意 | `60` | N秒超の待機が必要なら中止 |
+| `output-dir` | 任意 | `results` | 出力ディレクトリ |
+
+### 出力
+
+| 出力 | 説明 |
+|---|---|
+| `status` | `CLEAN` \| `LEAKS_FOUND` \| `RATE_LIMITED` \| `ERROR` |
+| `leak-count` | 検出した漏洩の件数 |
+| `exit-code` | `0` クリーン · `1` 漏洩あり · `2` レート制限 |
+
+---
+
+## セットアップ（セルフホスト / Fork）
 
 ### 1. このリポジトリをフォーク
 

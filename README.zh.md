@@ -26,7 +26,44 @@
 
 ---
 
-## 配置步骤
+## 作为 GitHub Action 使用
+
+在任意仓库的工作流中两行即可接入：
+
+```yaml
+- uses: actions/checkout@v4
+
+- name: 邮件泄露扫描
+  uses: long-910/github_leak_check@v1
+  with:
+    github-token: ${{ secrets.GH_PAT }}
+```
+
+### 所有输入参数
+
+| 参数 | 必填 | 默认值 | 说明 |
+|---|---|---|---|
+| `github-token` | 是 | — | 具有 `repo` + `read:user` 权限的 PAT |
+| `username` | 否 | 仓库所有者 | 要扫描的 GitHub 用户名 |
+| `target-emails` | 否 | _(全部)_ | 逗号分隔的监测地址 |
+| `max-commits` | 否 | `500` | 每个仓库最多扫描的提交数 |
+| `include-forks` | 否 | `false` | 同时扫描 Fork 的仓库 |
+| `no-files` | 否 | `false` | 跳过文件内容扫描 |
+| `full-scan` | 否 | `false` | 忽略上次扫描时间戳 |
+| `max-rate-wait` | 否 | `60` | 超过 N 秒的等待则中止 |
+| `output-dir` | 否 | `results` | 输出目录 |
+
+### 输出
+
+| 输出 | 说明 |
+|---|---|
+| `status` | `CLEAN` \| `LEAKS_FOUND` \| `RATE_LIMITED` \| `ERROR` |
+| `leak-count` | 检测到的泄露数量 |
+| `exit-code` | `0` 无泄露 · `1` 有泄露 · `2` 超出速率限制 |
+
+---
+
+## 配置步骤（自托管 / Fork）
 
 ### 1. Fork 本仓库
 

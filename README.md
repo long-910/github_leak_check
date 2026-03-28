@@ -26,7 +26,90 @@ Results are stored as:
 
 ---
 
-## Setup
+## Use as a GitHub Action
+
+Add to any repository's workflow in two lines:
+
+```yaml
+- uses: actions/checkout@v4
+
+- name: Email leak scan
+  uses: long-910/github_leak_check@v1
+  with:
+    github-token: ${{ secrets.GH_PAT }}
+```
+
+### All inputs
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `github-token` | Yes | — | PAT with `repo` + `read:user` scopes |
+| `username` | No | repo owner | GitHub username to scan |
+| `target-emails` | No | _(all)_ | Comma-separated addresses to watch |
+| `max-commits` | No | `500` | Max commits per repo |
+| `include-forks` | No | `false` | Also scan forked repos |
+| `no-files` | No | `false` | Skip file content scan |
+| `full-scan` | No | `false` | Ignore previous scan timestamp |
+| `max-rate-wait` | No | `60` | Abort if rate-limit wait > N seconds |
+| `output-dir` | No | `results` | Output directory |
+
+### Outputs
+
+| Output | Description |
+|---|---|
+| `status` | `CLEAN` \| `LEAKS_FOUND` \| `RATE_LIMITED` \| `ERROR` |
+| `leak-count` | Number of leaks found |
+| `exit-code` | `0` clean · `1` leaks · `2` rate limited |
+
+### Full example workflow
+
+```yaml
+name: Email Leak Check
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run scan
+        id: scan
+        uses: long-910/github_leak_check@v1
+        with:
+          github-token:  ${{ secrets.GH_PAT }}
+          target-emails: ${{ secrets.TARGET_EMAILS }}
+          max-rate-wait: '60'
+
+      - name: Cancel if rate limited
+        if: steps.scan.outputs.exit-code == '2'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh run cancel "${{ github.run_id }}"
+
+      - name: Commit results
+        if: steps.scan.outputs.exit-code != '2'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add results/summary.json results/card.svg
+          git diff --staged --quiet || \
+            git commit -m "chore: update scan results [skip ci]" && git push
+```
+
+---
+
+## Setup (self-hosted / fork)
 
 ### 1. Fork this repo
 
