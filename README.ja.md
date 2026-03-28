@@ -10,6 +10,30 @@ GitHub のコミット履歴・ファイル内容・プロフィールから `no
 
 ---
 
+## 背景・作成動機
+
+### 「メールアドレスを非公開にしているのに、GitHub 関連の迷惑メールが増えてきた…」
+
+GitHub の **"Keep my email addresses private"**（Settings → Emails）を有効にすると、**以降の**コミットのメールアドレスが `@users.noreply.github.com` に置き換わります。しかしこの設定は、**既存のコミット履歴を遡って修正することはありません。**
+
+よくある漏洩パターン：
+
+| パターン | 漏洩の原因 |
+|---|---|
+| **古いコミット** | 設定を有効にする前のコミット、またはローカルの `git config` に本物のアドレスが残ったまま |
+| **強制プッシュ / rebase** | 履歴を書き換えても、古い author メタデータが commit オブジェクトに含まれたまま再公開される |
+| **他サービスからの移行** | 別のホスティングから持ってきたリポジトリに元のメールアドレスが全コミットに残っている |
+| **公開プロフィール** | プロフィールのメールフィールドは誰でも閲覧でき、スクレイピングの対象になりやすい |
+| **ソースファイル** | `package.json`・`setup.py`・README・`.mailmap` などにメールアドレスを直接書いている |
+
+### スパムボットがアドレスを見つける仕組み
+
+ボットは GitHub のコミット API や検索インデックスを常時クロールしています。公開リポジトリのどこか1つのコミットに本物のアドレスがあれば、すぐにメーリングリストへ登録され、迷惑メールが届き始めます。
+
+**このツール**は GitHub アカウント全体を自動・定期的に監査し、ボットに発見される前に漏洩箇所を把握できるようにします。
+
+---
+
 ## 機能
 
 1. **コミットスキャン** — すべてのリポジトリの各コミットに含まれる `author.email` と `committer.email` を確認
@@ -199,17 +223,157 @@ python generate_card.py
 
 ---
 
-## 漏洩の修正
+## 漏洩が見つかったときの対処法
 
-`scan.py` 実行後、`fix.py` で漏洩したメールアドレスを置換します。
+### ステップ 0 — まず新たな漏洩を止める（最優先）
 
+履歴を修正する前に、今後の漏洩を防ぎます。
+
+1. **GitHub Settings → Emails**
+   - **"Keep my email addresses private"** にチェック
+   - **"Block command line pushes that expose my email"** にチェック
+
+2. **ローカルの git config を更新**して、今後のコミットで noreply アドレスを使うようにします：
+   ```bash
+   # GitHub Settings → Emails で noreply アドレスを確認できます
+   git config --global user.email "ID+USERNAME@users.noreply.github.com"
+   ```
+
+3. **設定を確認：**
+   ```bash
+   git config --global user.email
+   # → ID+USERNAME@users.noreply.github.com と表示されればOK
+   ```
+
+---
+
+### ステップ 1 — noreply アドレスを確認する
+
+フォーマット：`ID+USERNAME@users.noreply.github.com`
+
+数値 ID の確認方法：
 ```bash
-python fix.py
+curl https://api.github.com/users/YOUR_USERNAME | grep '"id"'
+# または https://api.github.com/users/YOUR_USERNAME をブラウザで開く
 ```
 
-検出された各アドレスに対して置換先を対話的に入力します。
-推奨フォーマットは `ID+USERNAME@users.noreply.github.com` です
-（数値IDは `https://api.github.com/users/USERNAME` の `id` フィールドで確認できます）。
+例：ID が `12345678`、ユーザー名が `alice` なら noreply アドレスは：
+`12345678+alice@users.noreply.github.com`
+
+---
+
+### ステップ 2 — プロフィール漏洩を修正する
+
+スキャンで **profile** 漏洩が見つかった場合：
+
+1. **https://github.com/settings/profile** を開く
+2. **"Public email"** を探す
+3. **"Don't show my email address"** に変更
+4. 保存する
+
+---
+
+### ステップ 3 — ファイル内容の漏洩を修正する
+
+README・package.json などのソースファイルにメールアドレスが含まれていた場合：
+
+```bash
+# 対話的に置換（推奨）
+python fix.py
+
+# 置換先を事前に指定する場合
+python fix.py --replace "old@example.com=12345+alice@users.noreply.github.com"
+```
+
+修正後は通常通りコミット＆プッシュします：
+```bash
+git add .
+git commit -m "fix: replace leaked email in source files"
+git push
+```
+
+---
+
+### ステップ 4 — コミット履歴の漏洩を修正する
+
+最も複雑なステップです。状況に応じてどちらかの方法を選んでください。
+
+#### 方法 A：`.mailmap` — 安全・履歴書き換え不要（まずこちらを推奨）
+
+`.mailmap` を使うと、`git log`・`git shortlog`・GitHub の Contributors ページで表示されるメールアドレスを_別のものに見せる_ことができます。実際の commit オブジェクトは変更されないため、**完全に安全で元に戻せます。**
+
+```bash
+python fix.py   # .mailmap を自動生成
+git add .mailmap
+git commit -m "chore: add mailmap to mask leaked email"
+git push
+```
+
+> **制限：** 実際の commit オブジェクトには古いアドレスが残り、GitHub API から取得可能です。完全に消したい場合は方法 B を使います。
+
+#### 方法 B：`git filter-repo` — 完全な履歴書き換え（永続的な修正）
+
+マッチする全コミットを永続的に書き換えます。**必ず事前にバックアップを取ってください。**
+
+```bash
+# 1. 変更内容をプレビュー（dry run）
+python fix.py --dry-run --rewrite
+
+# 2. 書き換えを実行
+python fix.py --rewrite
+
+# 3. 全ブランチを強制プッシュ
+git push --force-with-lease origin main
+git push --force-with-lease origin --all
+```
+
+> ⚠️ **強制プッシュ後の注意：**
+> - すべての共同作業者は `git fetch && git reset --hard origin/main` または再クローンが必要
+> - 他のユーザーが Fork したリポジトリには古い履歴が残ります — Fork 元に連絡してください
+> - GitHub の検索インデックスのキャッシュは数日以内にクリアされます
+
+#### どちらを選ぶべきか
+
+| 状況 | 推奨 |
+|---|---|
+| 個人リポジトリ・共同作業者なし | 方法 B（完全書き換え） |
+| チームリポジトリ・共同作業者あり | まず方法 A → コードフリーズ期間中に方法 B を調整実施 |
+| アーカイブ済み / 読み取り専用 | 方法 A（安全・影響なし） |
+| 多数の Fork にすでに拡散している | 方法 A（Fork は制御できないため） |
+
+---
+
+### ステップ 5 — 修正を確認する
+
+`--full` オプションで再スキャンし、漏洩がなくなったことを確認します：
+
+```bash
+GH_PAT=ghp_... python scan.py YOUR_USERNAME --full --email your@real.address
+```
+
+クリーンな結果：
+```
+✅ Status: CLEAN
+   Leaks found: 0
+```
+
+---
+
+### fix.py クイックリファレンス
+
+```bash
+# 対話的（アドレスごとに入力を促す）
+python fix.py
+
+# 非対話的
+python fix.py --replace "old@example.com=12345+alice@users.noreply.github.com"
+
+# プレビューのみ（実際には変更しない）
+python fix.py --dry-run
+
+# 完全な履歴書き換え（確認あり）
+python fix.py --rewrite
+```
 
 **fix.py の修正ステップ：**
 
@@ -219,28 +383,6 @@ python fix.py
 | 2 | ローカルのファイル内容を置換 | ✅ 安全 |
 | 3 | `git filter-repo` で git 履歴を書き換える | ⚠️ 破壊的 — オプトイン |
 | 4 | プロフィール漏洩の手動修正手順を表示 | — 手動 |
-
-### 置換先をあらかじめ指定する
-
-```bash
-python fix.py --replace "old@example.com=12345+user@users.noreply.github.com"
-```
-
-### git 履歴の書き換え（破壊的操作）
-
-```bash
-# まずプレビュー
-python fix.py --dry-run --rewrite
-
-# 確認後に実行（バックアップ推奨、元に戻せません）
-python fix.py --rewrite
-
-# 実行後に強制プッシュ
-git push --force-with-lease origin main
-```
-
-> **注意：** 履歴を書き換えると、すべての共同作業者が再クローンまたはリベースが必要になります。
-> `git-filter-repo` は `requirements.txt` に含まれており、`pip install -r requirements.txt` でインストールされます。
 
 ---
 

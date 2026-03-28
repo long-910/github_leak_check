@@ -10,6 +10,30 @@
 
 ---
 
+## 背景与动机
+
+### "我已开启「保护邮件地址」设置，为什么还会收到与 GitHub 相关的垃圾邮件？"
+
+GitHub 的 **"Keep my email addresses private"**（Settings → Emails）只对**未来的**提交生效，会将提交邮件替换为 `@users.noreply.github.com`。但它**不会**自动修复历史提交记录。
+
+常见的邮件泄露场景：
+
+| 场景 | 泄露原因 |
+|---|---|
+| **旧提交记录** | 开启设置之前的提交，或本地 `git config` 仍配置了真实邮件 |
+| **强制推送 / rebase** | 重写历史时，旧的 author 元数据会随 commit 对象再次暴露 |
+| **从其他平台迁移的仓库** | 迁移过来的仓库保留了原始作者邮件 |
+| **公开资料页** | GitHub 个人资料中的邮件字段对任何人可见，容易被抓取 |
+| **源文件** | `package.json`、`setup.py`、README、`.mailmap` 等文件中直接写入了邮件地址 |
+
+### 垃圾邮件机器人如何找到你
+
+爬虫机器人会持续抓取 GitHub 的提交 API 和搜索索引。只要一个公开仓库的任意提交中包含真实邮件，它就可能被收录到邮件列表，随后垃圾邮件便接踵而至。
+
+**本工具**可以自动、定期审查你的整个 GitHub 账号，让你在机器人发现之前，率先掌握邮件地址的暴露情况。
+
+---
+
 ## 功能说明
 
 1. **提交记录扫描** — 检查你所有仓库中每条提交的 `author.email` 和 `committer.email`
@@ -199,17 +223,157 @@ python generate_card.py
 
 ---
 
-## 修复泄露
+## 检测到泄露后的处理方法
 
-运行 `scan.py` 后，使用 `fix.py` 替换泄露的邮件地址。
+### 第 0 步 — 立即阻止新的泄露（最优先执行）
 
+在修复历史之前，先切断泄露源头：
+
+1. **GitHub Settings → Emails**
+   - 勾选 **"Keep my email addresses private"**
+   - 勾选 **"Block command line pushes that expose my email"**
+
+2. **更新本地 git 配置**，让今后的提交自动使用 noreply 地址：
+   ```bash
+   # 在 GitHub Settings → Emails 页面可以找到你的 noreply 地址
+   git config --global user.email "ID+USERNAME@users.noreply.github.com"
+   ```
+
+3. **确认生效：**
+   ```bash
+   git config --global user.email
+   # 应输出：ID+USERNAME@users.noreply.github.com
+   ```
+
+---
+
+### 第 1 步 — 找到你的 noreply 地址
+
+格式：`ID+USERNAME@users.noreply.github.com`
+
+查找数字 ID：
 ```bash
-python fix.py
+curl https://api.github.com/users/YOUR_USERNAME | grep '"id"'
+# 或直接打开：https://api.github.com/users/YOUR_USERNAME
 ```
 
-工具会提示你为每个泄露地址输入替换邮件。
-推荐使用 `ID+USERNAME@users.noreply.github.com` 格式
-（在 `https://api.github.com/users/USERNAME` 可以找到你的数字 ID）。
+示例：ID 为 `12345678`，用户名为 `alice`，则 noreply 地址为：
+`12345678+alice@users.noreply.github.com`
+
+---
+
+### 第 2 步 — 修复资料页泄露
+
+若扫描发现 **profile** 泄露：
+
+1. 前往 **https://github.com/settings/profile**
+2. 找到 **"Public email"**
+3. 设置为 **"Don't show my email address"**
+4. 保存
+
+---
+
+### 第 3 步 — 修复文件内容泄露
+
+若扫描发现源文件（README、package.json 等）中含有邮件地址：
+
+```bash
+# 交互式替换
+python fix.py
+
+# 或直接指定替换内容
+python fix.py --replace "old@example.com=12345+alice@users.noreply.github.com"
+```
+
+然后正常提交并推送：
+```bash
+git add .
+git commit -m "fix: replace leaked email in source files"
+git push
+```
+
+---
+
+### 第 4 步 — 修复提交历史泄露
+
+这是最复杂的部分，请根据实际情况选择方案：
+
+#### 方案 A：`.mailmap` — 安全，无需重写历史（推荐优先尝试）
+
+`.mailmap` 告诉 Git 在 `git log`、`git shortlog` 和 GitHub 贡献者页面中_显示_不同的作者邮件，但**不会**改写实际的 commit 对象，完全安全且可撤销。
+
+```bash
+python fix.py   # 自动生成 .mailmap
+git add .mailmap
+git commit -m "chore: add mailmap to mask leaked email"
+git push
+```
+
+> **局限性：** 原始 commit 对象仍包含旧邮件，可通过 GitHub API 访问。要彻底消除，请使用方案 B。
+
+#### 方案 B：`git filter-repo` — 彻底重写历史（永久修复）
+
+该方法会永久重写每条匹配的提交。**操作前请务必备份仓库。**
+
+```bash
+# 1. 预览将要变更的内容（dry run）
+python fix.py --dry-run --rewrite
+
+# 2. 执行重写
+python fix.py --rewrite
+
+# 3. 强制推送所有分支
+git push --force-with-lease origin main
+git push --force-with-lease origin --all
+```
+
+> ⚠️ **强制推送后：**
+> - 所有协作者需执行 `git fetch && git reset --hard origin/main` 或重新克隆
+> - 其他人 Fork 的仓库仍保留旧历史 — 请联系 Fork 的所有者
+> - GitHub 搜索索引缓存通常在数天内清除
+
+#### 方案选择建议
+
+| 情况 | 推荐方案 |
+|---|---|
+| 个人仓库，无协作者 | 方案 B（彻底重写） |
+| 团队仓库，有活跃协作者 | 先用方案 A；在代码冻结期协调执行方案 B |
+| 已归档 / 只读仓库 | 方案 A（安全，不影响协作） |
+| 邮件已扩散到大量 Fork | 方案 A（Fork 已无法控制） |
+
+---
+
+### 第 5 步 — 验证修复结果
+
+使用 `--full` 参数重新扫描，确认邮件不再出现：
+
+```bash
+GH_PAT=ghp_... python scan.py YOUR_USERNAME --full --email your@real.address
+```
+
+干净的结果如下：
+```
+✅ Status: CLEAN
+   Leaks found: 0
+```
+
+---
+
+### fix.py 快速参考
+
+```bash
+# 交互式（逐一提示输入替换地址）
+python fix.py
+
+# 非交互式
+python fix.py --replace "old@example.com=12345+alice@users.noreply.github.com"
+
+# 预览，不实际修改
+python fix.py --dry-run
+
+# 彻底重写历史（需要确认）
+python fix.py --rewrite
+```
 
 **fix.py 的修复步骤：**
 
@@ -219,28 +383,6 @@ python fix.py
 | 2 | 替换本地工作区文件中的邮件地址 | ✅ 安全 |
 | 3 | 使用 `git filter-repo` 重写 git 历史 | ⚠️ 破坏性 — 需主动启用 |
 | 4 | 打印 Profile 泄露的手动修复说明 | — 手动操作 |
-
-### 提前指定替换地址
-
-```bash
-python fix.py --replace "old@example.com=12345+user@users.noreply.github.com"
-```
-
-### 重写 git 历史（破坏性操作）
-
-```bash
-# 先预览
-python fix.py --dry-run --rewrite
-
-# 确认后执行（无法撤销，请先备份）
-python fix.py --rewrite
-
-# 然后强制推送
-git push --force-with-lease origin main
-```
-
-> **警告：** 历史重写后，所有协作者需重新克隆或 rebase。
-> `git-filter-repo` 已包含在 `requirements.txt` 中，运行 `pip install -r requirements.txt` 即可安装。
 
 ---
 

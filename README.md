@@ -10,6 +10,30 @@ Scan GitHub commits, file contents, and user profiles for non-`noreply` email ad
 
 ---
 
+## Background & motivation
+
+### "I have Keep my email addresses private — so why am I getting GitHub-related spam?"
+
+GitHub's **"Keep my email addresses private"** setting (Settings → Emails) makes _future_ commits use your `@users.noreply.github.com` address. However, it does **not** retroactively fix your commit history.
+
+Common ways a real email address can still be exposed:
+
+| Scenario | Why it leaks |
+|---|---|
+| **Old commits** | Made before enabling the setting, or from a machine whose `git config` still had a real address |
+| **Force-push / rebase** | Rewrites history but re-publishes old author metadata that was already in the tree |
+| **Cloned & re-pushed repos** | Migrating a project from another host preserves the original author email in every commit |
+| **Public profile** | Email field on your GitHub profile is visible to anyone and easily scraped |
+| **Source files** | `package.json`, `setup.py`, README, `.mailmap`, etc. that contain your address as author metadata |
+
+### How spam bots find you
+
+Bots continuously scrape GitHub's commit API and search index. A single commit with a real email in a public repo is enough — they harvest it, add it to mailing lists, and the spam starts.
+
+**This tool** lets you audit your entire GitHub account automatically and on a regular schedule, so you know exactly where your address is still exposed before the bots find it.
+
+---
+
 ## What it does
 
 1. **Commit scan** — checks every commit's `author.email` and `committer.email` across all your repos
@@ -245,19 +269,161 @@ python generate_card.py
 
 ---
 
-## Fixing leaks
+## What to do when a leak is detected
 
-After running `scan.py`, use `fix.py` to replace leaked addresses.
+### Step 0 — Stop new leaks immediately (do this first)
 
+Before fixing history, prevent further exposure:
+
+1. **GitHub Settings → Emails**
+   - Check **"Keep my email addresses private"**
+   - Check **"Block command line pushes that expose my email"**
+
+2. **Update your local git config** so every new commit uses the noreply address:
+   ```bash
+   # Find your noreply address in GitHub Settings → Emails
+   git config --global user.email "ID+USERNAME@users.noreply.github.com"
+   ```
+
+3. **Verify** the change took effect:
+   ```bash
+   git config --global user.email
+   # Should print: ID+USERNAME@users.noreply.github.com
+   ```
+
+---
+
+### Step 1 — Find your noreply address
+
+Your GitHub noreply address has the format: `ID+USERNAME@users.noreply.github.com`
+
+Find your numeric ID:
 ```bash
-python fix.py
+curl https://api.github.com/users/YOUR_USERNAME | grep '"id"'
+# or open: https://api.github.com/users/YOUR_USERNAME
 ```
 
-It will prompt you for a replacement email for each leaked address.
-The recommended format is `ID+USERNAME@users.noreply.github.com`
-(find your numeric ID at `https://api.github.com/users/USERNAME`).
+Example: if your ID is `12345678` and username is `alice`, your noreply address is:
+`12345678+alice@users.noreply.github.com`
 
-**What fix.py does:**
+---
+
+### Step 2 — Fix profile leak
+
+If the scan found a **profile** leak:
+
+1. Go to **https://github.com/settings/profile**
+2. Scroll to **"Public email"**
+3. Set it to **"Don't show my email address"**
+4. Save
+
+---
+
+### Step 3 — Fix file content leaks
+
+If the scan found emails inside source files (README, package.json, etc.):
+
+```bash
+# Interactive replacement
+python fix.py
+
+# Or specify the replacement upfront
+python fix.py --replace "old@example.com=12345+alice@users.noreply.github.com"
+```
+
+Then commit and push normally:
+```bash
+git add .
+git commit -m "fix: replace leaked email in source files"
+git push
+```
+
+---
+
+### Step 4 — Fix commit history leaks
+
+This is the most complex part. Choose the approach that fits your situation:
+
+#### Option A: `.mailmap` — safe, no history rewrite (recommended first)
+
+`.mailmap` tells Git to _display_ a different author email in `git log`, `git shortlog`, and on the GitHub contributors page. It does **not** rewrite actual commit objects — so it's completely safe and reversible.
+
+```bash
+python fix.py   # generates .mailmap automatically
+git add .mailmap
+git commit -m "chore: add mailmap to mask leaked email"
+git push
+```
+
+> **Limitation:** The raw commit objects still contain the old email and are accessible via the GitHub API. Determined scrapers can still find it. Use Option B to fully erase it.
+
+#### Option B: `git filter-repo` — full history rewrite (permanent fix)
+
+This permanently rewrites every matching commit. **Back up your repo first.**
+
+```bash
+# 1. Preview what will change (dry run)
+python fix.py --dry-run --rewrite
+
+# 2. Apply the rewrite
+python fix.py --rewrite
+
+# 3. Force-push all branches
+git push --force-with-lease origin main
+
+# 4. If you have other branches
+git push --force-with-lease origin --all
+```
+
+> ⚠️ **After a force-push:**
+> - All collaborators must `git fetch && git reset --hard origin/main` or re-clone
+> - Existing forks on GitHub still contain the old history — contact their owners
+> - GitHub's search index cache clears within a few days
+
+#### Which option to choose?
+
+| Situation | Recommendation |
+|---|---|
+| Personal repo, no collaborators | Option B (full rewrite) |
+| Team repo, active collaborators | Option A first; coordinate Option B during a freeze window |
+| Archived / read-only repo | Option A (safe, no disruption) |
+| Email already in many forks | Option A (forks are out of your control anyway) |
+
+---
+
+### Step 5 — Verify the fix
+
+Run the scanner again with `--full` to confirm nothing remains:
+
+```bash
+GH_PAT=ghp_... python scan.py YOUR_USERNAME --full --email your@real.address
+```
+
+A clean result looks like:
+```
+✅ Status: CLEAN
+   Leaks found: 0
+```
+
+---
+
+### Fixing leaks with `fix.py` (quick reference)
+
+```bash
+# Interactive — prompts for replacement
+python fix.py
+
+# Non-interactive
+python fix.py --replace "old@example.com=12345+alice@users.noreply.github.com"
+
+# Preview without applying
+python fix.py --dry-run
+
+# Full history rewrite (requires confirmation)
+python fix.py --rewrite
+```
+
+**What `fix.py` does:**
 
 | Step | Action | Safe? |
 |---|---|---|
@@ -265,35 +431,6 @@ The recommended format is `ID+USERNAME@users.noreply.github.com`
 | 2 | Replace emails in local working-tree files | ✅ Safe |
 | 3 | Rewrite git history with `git filter-repo` | ⚠️ Destructive — opt-in only |
 | 4 | Print instructions for profile leaks | — Manual |
-
-### Specify replacements upfront
-
-```bash
-# macOS / Linux
-python fix.py --replace "old@example.com=12345+user@users.noreply.github.com"
-
-# Windows — PowerShell
-python fix.py --replace "old@example.com=12345+user@users.noreply.github.com"
-
-# Windows — Command Prompt
-python fix.py --replace "old@example.com=12345+user@users.noreply.github.com"
-```
-
-### Rewrite git history (destructive)
-
-```bash
-# Preview first
-python fix.py --dry-run --rewrite
-
-# Apply — cannot be undone without a backup
-python fix.py --rewrite
-
-# Then force-push
-git push --force-with-lease origin main
-```
-
-> **Warning:** History rewrite requires all collaborators to re-clone or rebase.
-> `git-filter-repo` is installed automatically via `pip install -r requirements.txt`.
 
 ---
 
