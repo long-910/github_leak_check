@@ -17,6 +17,7 @@ Scan GitHub commits, file contents, and user profiles for non-`noreply` email ad
 3. **Profile scan** — checks if your public GitHub profile has an email set
 4. Flags anything that isn't a `@users.noreply.github.com` (or other bot/noreply) address
 5. **Incremental** — on repeat runs, only commits after the previous scan's timestamp are checked
+6. **Forks excluded by default** — forked repos are skipped unless `--include-forks` is specified
 
 Results are stored as:
 - `results/summary.json` — aggregated counts, **no real emails** (committed); includes `since` field showing the scan window
@@ -93,6 +94,9 @@ GH_PAT=ghp_... python scan.py YOUR_USERNAME --full
 # Scan commits after a specific date
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --since 2026-01-01T00:00:00Z
 
+# Also scan forked repositories (excluded by default)
+GH_PAT=ghp_... python scan.py YOUR_USERNAME --include-forks
+
 # Scan for a specific email address only
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --email your@example.com
 
@@ -122,6 +126,9 @@ python scan.py YOUR_USERNAME --full
 
 # Scan commits after a specific date
 python scan.py YOUR_USERNAME --since 2026-01-01T00:00:00Z
+
+# Also scan forked repositories
+python scan.py YOUR_USERNAME --include-forks
 
 # Scan for a specific email address only
 python scan.py YOUR_USERNAME --email your@example.com

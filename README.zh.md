@@ -17,6 +17,7 @@
 3. **资料页扫描** — 检查你的 GitHub 公开资料是否设置了邮件地址
 4. 将所有非 `@users.noreply.github.com`（及其他 bot/noreply）地址标记为潜在泄露
 5. **增量扫描** — 重复运行时，仅检查上次扫描时间戳之后的新提交
+6. **默认排除 Fork 仓库** — 除非指定 `--include-forks`，否则跳过所有 Fork 的仓库
 
 输出文件说明：
 - `results/summary.json` — 汇总统计，**不含真实邮件地址**（会提交到仓库）；含 `since` 字段，记录本次扫描的起始时间
@@ -93,6 +94,9 @@ GH_PAT=ghp_... python scan.py YOUR_USERNAME --full
 # 从指定日期起扫描
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --since 2026-01-01T00:00:00Z
 
+# 同时扫描 Fork 的仓库（默认排除）
+GH_PAT=ghp_... python scan.py YOUR_USERNAME --include-forks
+
 # 只检测指定邮件地址
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --email your@example.com
 
@@ -122,6 +126,9 @@ python scan.py YOUR_USERNAME --full
 
 # 从指定日期起扫描
 python scan.py YOUR_USERNAME --since 2026-01-01T00:00:00Z
+
+# 同时扫描 Fork 的仓库
+python scan.py YOUR_USERNAME --include-forks
 
 # 只检测指定邮件地址
 python scan.py YOUR_USERNAME --email your@example.com

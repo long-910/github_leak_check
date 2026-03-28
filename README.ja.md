@@ -17,6 +17,7 @@ GitHub のコミット履歴・ファイル内容・プロフィールから `no
 3. **プロフィールスキャン** — GitHub の公開プロフィールにメールアドレスが設定されていないか確認
 4. `@users.noreply.github.com`（および他の bot/noreply アドレス）以外のすべてのアドレスを潜在的な漏洩として報告
 5. **差分スキャン** — 2回目以降は前回スキャン時刻以降のコミットのみを対象にする
+6. **フォークをデフォルト除外** — `--include-forks` を指定しない限り、フォークしたリポジトリはスキップされる
 
 出力ファイル：
 - `results/summary.json` — 集計のみ、**実メールアドレスなし**（コミット対象）；`since` フィールドで今回のスキャン範囲を記録
@@ -93,6 +94,9 @@ GH_PAT=ghp_... python scan.py YOUR_USERNAME --full
 # 指定した日時以降のコミットをスキャン
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --since 2026-01-01T00:00:00Z
 
+# フォークしたリポジトリも含めてスキャン（デフォルト除外）
+GH_PAT=ghp_... python scan.py YOUR_USERNAME --include-forks
+
 # 特定のメールアドレスだけを検出
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --email your@example.com
 
@@ -122,6 +126,9 @@ python scan.py YOUR_USERNAME --full
 
 # 指定した日時以降のコミットをスキャン
 python scan.py YOUR_USERNAME --since 2026-01-01T00:00:00Z
+
+# フォークしたリポジトリも含めてスキャン
+python scan.py YOUR_USERNAME --include-forks
 
 # 特定のメールアドレスだけを検出
 python scan.py YOUR_USERNAME --email your@example.com

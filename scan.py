@@ -197,6 +197,7 @@ class LeakScanner:
         scan_files: bool = True,
         target_emails: Optional[set[str]] = None,
         since: Optional[str] = None,
+        include_forks: bool = False,
     ):
         self.client = client
         self.max_commits = max_commits
@@ -207,6 +208,8 @@ class LeakScanner:
         )
         # ISO 8601 timestamp; only commits after this date are scanned.
         self.since = since
+        # Forked repos are excluded by default.
+        self.include_forks = include_forks
         self.leaks: list[dict] = []
         self.stats = {
             "repos_scanned": 0,
@@ -313,14 +316,19 @@ class LeakScanner:
     def run(self, username: str) -> dict:
         self.scan_profile(username)
 
-        repos = list(self.client.get_repos(username))
-        _log(f"Found {len(repos)} repos owned by @{username}")
+        all_repos = list(self.client.get_repos(username))
+        repos = [r for r in all_repos if self.include_forks or not r.get("fork", False)]
+        skipped_forks = len(all_repos) - len(repos)
+
+        _log(
+            f"Found {len(all_repos)} repos owned by @{username}"
+            + (f" ({skipped_forks} fork(s) skipped)" if skipped_forks else "")
+        )
 
         for i, repo in enumerate(repos, 1):
             full_name = repo["full_name"]
             branch = repo.get("default_branch") or "main"
-            is_fork = repo.get("fork", False)
-            _log(f"  [{i}/{len(repos)}] {full_name}{'  (fork)' if is_fork else ''}")
+            _log(f"  [{i}/{len(repos)}] {full_name}")
 
             self.stats["repos_scanned"] += 1
             self.scan_commits(full_name)
@@ -425,6 +433,11 @@ Output files:
         help="Ignore previous scan time and scan all commits.",
     )
     parser.add_argument(
+        "--include-forks",
+        action="store_true",
+        help="Also scan forked repositories (excluded by default).",
+    )
+    parser.add_argument(
         "--output-dir",
         default="results",
         metavar="DIR",
@@ -487,6 +500,7 @@ Output files:
         max_commits=args.max_commits,
         scan_files=not args.no_files,
         target_emails=target_emails,
+        include_forks=args.include_forks,
         since=since,
     )
 
