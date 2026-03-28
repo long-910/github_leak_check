@@ -1,0 +1,61 @@
+name: Email Leak Scan
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 3 * * *'   # 03:00 UTC daily
+  workflow_dispatch:        # manual trigger from Actions tab
+
+permissions:
+  contents: write           # needed to push summary.json + card.svg back
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # ── Run scanner ───────────────────────────────────────────────────────
+      # GH_PAT: Personal Access Token stored as a repo secret.
+      # Required scopes: repo (or public_repo for public repos only) + read:user
+      # If GH_PAT is not set, falls back to GITHUB_TOKEN (limited scope).
+      # "|| true" ensures the workflow continues even when leaks are found
+      # (scan.py exits 1 on leaks so the card still gets generated).
+      - name: Run scanner
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_USERNAME: ${{ github.repository_owner }}
+        run: python scan.py --verbose || true
+
+      - name: Generate status card
+        run: python generate_card.py
+
+      # ── Commit results ────────────────────────────────────────────────────
+      # IMPORTANT: Uses noreply bot email so this commit itself is clean.
+      # [skip ci] prevents an infinite push → trigger → push loop.
+      # leaks.json is gitignored and will never be staged here.
+      - name: Commit results
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
+          git add results/summary.json results/card.svg
+          git diff --staged --quiet \
+            && echo "No changes to commit." \
+            || git commit -m "chore: update scan results [skip ci]" \
+            && git push

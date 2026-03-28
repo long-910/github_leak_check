@@ -1,0 +1,14 @@
+# Scan output (may contain real email addresses - DO NOT commit)
+results/leaks.json
+
+# Python
+*.pyc
+__pycache__/
+.venv/
+venv/
+.env
+
+# Editor
+.vscode/
+.idea/
+*.swp
