@@ -78,8 +78,14 @@ pip install -r requirements.txt
 ### macOS / Linux
 
 ```bash
-# Scan (replace with your username and token)
+# Scan all non-noreply emails (replace with your username and token)
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --verbose
+
+# Scan for a specific email address only
+GH_PAT=ghp_... python scan.py YOUR_USERNAME --email your@example.com
+
+# Scan for multiple specific addresses
+GH_PAT=ghp_... python scan.py YOUR_USERNAME --email work@example.com --email personal@example.com
 
 # Generate card from existing summary
 python generate_card.py
@@ -94,9 +100,16 @@ GH_PAT=ghp_... python scan.py YOUR_USERNAME --max-commits 2000
 ### Windows — PowerShell
 
 ```powershell
-# Scan
 $env:GH_PAT = "ghp_..."
+
+# Scan all non-noreply emails
 python scan.py YOUR_USERNAME --verbose
+
+# Scan for a specific email address only
+python scan.py YOUR_USERNAME --email your@example.com
+
+# Scan for multiple specific addresses
+python scan.py YOUR_USERNAME --email work@example.com --email personal@example.com
 
 # Generate card
 python generate_card.py

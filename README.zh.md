@@ -78,8 +78,14 @@ pip install -r requirements.txt
 ### macOS / Linux
 
 ```bash
-# 扫描（替换为你的用户名和 Token）
+# 扫描所有非 noreply 邮件（替换为你的用户名和 Token）
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --verbose
+
+# 只检测指定邮件地址
+GH_PAT=ghp_... python scan.py YOUR_USERNAME --email your@example.com
+
+# 同时检测多个地址
+GH_PAT=ghp_... python scan.py YOUR_USERNAME --email work@example.com --email personal@example.com
 
 # 从已有摘要生成卡片
 python generate_card.py
@@ -94,9 +100,16 @@ GH_PAT=ghp_... python scan.py YOUR_USERNAME --max-commits 2000
 ### Windows — PowerShell
 
 ```powershell
-# 扫描
 $env:GH_PAT = "ghp_..."
+
+# 扫描所有非 noreply 邮件
 python scan.py YOUR_USERNAME --verbose
+
+# 只检测指定邮件地址
+python scan.py YOUR_USERNAME --email your@example.com
+
+# 同时检测多个地址
+python scan.py YOUR_USERNAME --email work@example.com --email personal@example.com
 
 # 生成卡片
 python generate_card.py

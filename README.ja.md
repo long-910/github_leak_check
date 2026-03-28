@@ -78,8 +78,14 @@ pip install -r requirements.txt
 ### macOS / Linux
 
 ```bash
-# スキャン（ユーザー名とトークンを置き換えてください）
+# noreply以外の全メールアドレスをスキャン（ユーザー名とトークンを置き換えてください）
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --verbose
+
+# 特定のメールアドレスだけを検出
+GH_PAT=ghp_... python scan.py YOUR_USERNAME --email your@example.com
+
+# 複数のアドレスを同時に検出
+GH_PAT=ghp_... python scan.py YOUR_USERNAME --email work@example.com --email personal@example.com
 
 # 既存のサマリーからカードを生成
 python generate_card.py
@@ -94,9 +100,16 @@ GH_PAT=ghp_... python scan.py YOUR_USERNAME --max-commits 2000
 ### Windows — PowerShell
 
 ```powershell
-# スキャン
 $env:GH_PAT = "ghp_..."
+
+# noreply以外の全メールアドレスをスキャン
 python scan.py YOUR_USERNAME --verbose
+
+# 特定のメールアドレスだけを検出
+python scan.py YOUR_USERNAME --email your@example.com
+
+# 複数のアドレスを同時に検出
+python scan.py YOUR_USERNAME --email work@example.com --email personal@example.com
 
 # カードを生成
 python generate_card.py

@@ -187,16 +187,34 @@ class GitHubClient:
 # ── Scanner ─────────────────────────────────────────────────────────────────────
 
 class LeakScanner:
-    def __init__(self, client: GitHubClient, max_commits: int = 500, scan_files: bool = True):
+    def __init__(
+        self,
+        client: GitHubClient,
+        max_commits: int = 500,
+        scan_files: bool = True,
+        target_emails: Optional[set[str]] = None,
+    ):
         self.client = client
         self.max_commits = max_commits
         self.scan_files = scan_files
+        # Lowercase for case-insensitive comparison. None = flag all non-noreply.
+        self.target_emails: Optional[set[str]] = (
+            {e.lower() for e in target_emails} if target_emails else None
+        )
         self.leaks: list[dict] = []
         self.stats = {
             "repos_scanned": 0,
             "commits_scanned": 0,
             "files_scanned": 0,
         }
+
+    def _is_target(self, email: str) -> bool:
+        """Return True if this email should be reported as a leak."""
+        if is_safe(email):
+            return False
+        if self.target_emails is None:
+            return True
+        return email.lower() in self.target_emails
 
     def _add_leak(self, entry: dict):
         self.leaks.append(entry)
@@ -206,7 +224,7 @@ class LeakScanner:
         _log(f"Checking profile @{username}...")
         user = self.client.get_user(username)
         email = (user.get("email") or "").strip()
-        if email and not is_safe(email):
+        if email and self._is_target(email):
             self._add_leak({
                 "surface": "profile",
                 "location": f"https://github.com/{username}",
@@ -230,7 +248,7 @@ class LeakScanner:
                 email = (git_data.get("email") or "").strip()
                 name = (git_data.get("name") or "").strip()
 
-                if not email or is_safe(email):
+                if not email or not self._is_target(email):
                     continue
 
                 key = f"{repo_name}:{role}:{email}"
@@ -267,7 +285,7 @@ class LeakScanner:
             self.stats["files_scanned"] += 1
             for match in EMAIL_RE.finditer(content):
                 email = match.group()
-                if is_safe(email):
+                if not self._is_target(email):
                     continue
                 key = f"{repo_name}:{path}:{email}"
                 if key in seen:
@@ -311,6 +329,7 @@ class LeakScanner:
         summary = {
             "username": username,
             "scanned_at": datetime.now(timezone.utc).isoformat(),
+            "target_emails": sorted(self.target_emails) if self.target_emails else None,
             "repos_scanned": self.stats["repos_scanned"],
             "commits_scanned": self.stats["commits_scanned"],
             "files_scanned": self.stats["files_scanned"],
@@ -356,6 +375,16 @@ Output files:
     )
     parser.add_argument("username", nargs="?", help="GitHub username to scan")
     parser.add_argument(
+        "--email",
+        action="append",
+        default=[],
+        metavar="ADDR",
+        help=(
+            "Only flag this specific email address (can be repeated). "
+            "Without this option, all non-noreply addresses are flagged."
+        ),
+    )
+    parser.add_argument(
         "--token",
         default=os.environ.get("GH_PAT") or os.environ.get("GITHUB_TOKEN"),
         metavar="TOKEN",
@@ -397,13 +426,19 @@ Output files:
     if not args.token:
         _print("WARNING: No token provided. Rate limit is 60 req/hr. Large repos may fail.")
 
-    _print(f"Scanning @{username} for email leaks...")
+    target_emails = set(args.email) if args.email else None
+
+    if target_emails:
+        _print(f"Scanning @{username} for specific address(es): {', '.join(sorted(target_emails))}")
+    else:
+        _print(f"Scanning @{username} for all non-noreply email leaks...")
 
     client = GitHubClient(token=args.token)
     scanner = LeakScanner(
         client,
         max_commits=args.max_commits,
         scan_files=not args.no_files,
+        target_emails=target_emails,
     )
 
     try:
