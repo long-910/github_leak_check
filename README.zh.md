@@ -16,9 +16,10 @@
 2. **文件内容扫描** — 在 README、package.json、pyproject.toml 等文件中搜索邮件地址模式
 3. **资料页扫描** — 检查你的 GitHub 公开资料是否设置了邮件地址
 4. 将所有非 `@users.noreply.github.com`（及其他 bot/noreply）地址标记为潜在泄露
+5. **增量扫描** — 重复运行时，仅检查上次扫描时间戳之后的新提交
 
 输出文件说明：
-- `results/summary.json` — 汇总统计，**不含真实邮件地址**（会提交到仓库）
+- `results/summary.json` — 汇总统计，**不含真实邮件地址**（会提交到仓库）；含 `since` 字段，记录本次扫描的起始时间
 - `results/card.svg` — 用于嵌入展示的状态卡片（会提交到仓库）
 - `results/leaks.json` — 包含真实地址的完整详情（**已加入 .gitignore，绝不提交**）
 
@@ -83,8 +84,14 @@ pip install -r requirements.txt
 ### macOS / Linux
 
 ```bash
-# 扫描所有非 noreply 邮件（替换为你的用户名和 Token）
+# 仅扫描上次检查后的新提交（默认行为——自动读取 summary.json 中的时间戳）
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --verbose
+
+# 强制全量扫描（忽略上次扫描时间）
+GH_PAT=ghp_... python scan.py YOUR_USERNAME --full
+
+# 从指定日期起扫描
+GH_PAT=ghp_... python scan.py YOUR_USERNAME --since 2026-01-01T00:00:00Z
 
 # 只检测指定邮件地址
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --email your@example.com
@@ -107,8 +114,14 @@ GH_PAT=ghp_... python scan.py YOUR_USERNAME --max-commits 2000
 ```powershell
 $env:GH_PAT = "ghp_..."
 
-# 扫描所有非 noreply 邮件
+# 仅扫描上次检查后的新提交（默认）
 python scan.py YOUR_USERNAME --verbose
+
+# 强制全量扫描
+python scan.py YOUR_USERNAME --full
+
+# 从指定日期起扫描
+python scan.py YOUR_USERNAME --since 2026-01-01T00:00:00Z
 
 # 只检测指定邮件地址
 python scan.py YOUR_USERNAME --email your@example.com
@@ -130,7 +143,12 @@ python scan.py YOUR_USERNAME --max-commits 2000
 
 ```cmd
 set GH_PAT=ghp_...
+
+REM 仅扫描上次检查后的新提交（默认）
 python scan.py YOUR_USERNAME --verbose
+
+REM 强制全量扫描
+python scan.py YOUR_USERNAME --full
 
 python generate_card.py
 ```

@@ -16,9 +16,10 @@ Scan GitHub commits, file contents, and user profiles for non-`noreply` email ad
 2. **File scan** — searches README, package.json, pyproject.toml, etc. for email-like patterns
 3. **Profile scan** — checks if your public GitHub profile has an email set
 4. Flags anything that isn't a `@users.noreply.github.com` (or other bot/noreply) address
+5. **Incremental** — on repeat runs, only commits after the previous scan's timestamp are checked
 
 Results are stored as:
-- `results/summary.json` — aggregated counts, **no real emails** (committed)
+- `results/summary.json` — aggregated counts, **no real emails** (committed); includes `since` field showing the scan window
 - `results/card.svg` — status card for embedding (committed)
 - `results/leaks.json` — full details with real addresses (**gitignored, never committed**)
 
@@ -83,8 +84,14 @@ pip install -r requirements.txt
 ### macOS / Linux
 
 ```bash
-# Scan all non-noreply emails (replace with your username and token)
+# Scan commits since the last run (default — reads scanned_at from summary.json)
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --verbose
+
+# Force a full scan regardless of previous results
+GH_PAT=ghp_... python scan.py YOUR_USERNAME --full
+
+# Scan commits after a specific date
+GH_PAT=ghp_... python scan.py YOUR_USERNAME --since 2026-01-01T00:00:00Z
 
 # Scan for a specific email address only
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --email your@example.com
@@ -107,8 +114,14 @@ GH_PAT=ghp_... python scan.py YOUR_USERNAME --max-commits 2000
 ```powershell
 $env:GH_PAT = "ghp_..."
 
-# Scan all non-noreply emails
+# Scan commits since the last run (default)
 python scan.py YOUR_USERNAME --verbose
+
+# Force a full scan
+python scan.py YOUR_USERNAME --full
+
+# Scan commits after a specific date
+python scan.py YOUR_USERNAME --since 2026-01-01T00:00:00Z
 
 # Scan for a specific email address only
 python scan.py YOUR_USERNAME --email your@example.com
@@ -130,7 +143,12 @@ python scan.py YOUR_USERNAME --max-commits 2000
 
 ```cmd
 set GH_PAT=ghp_...
+
+REM Scan commits since the last run (default)
 python scan.py YOUR_USERNAME --verbose
+
+REM Force a full scan
+python scan.py YOUR_USERNAME --full
 
 python generate_card.py
 ```

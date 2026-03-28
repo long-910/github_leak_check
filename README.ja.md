@@ -16,9 +16,10 @@ GitHub のコミット履歴・ファイル内容・プロフィールから `no
 2. **ファイルスキャン** — README・package.json・pyproject.toml などのファイル内からメールアドレスのパターンを検索
 3. **プロフィールスキャン** — GitHub の公開プロフィールにメールアドレスが設定されていないか確認
 4. `@users.noreply.github.com`（および他の bot/noreply アドレス）以外のすべてのアドレスを潜在的な漏洩として報告
+5. **差分スキャン** — 2回目以降は前回スキャン時刻以降のコミットのみを対象にする
 
 出力ファイル：
-- `results/summary.json` — 集計のみ、**実メールアドレスなし**（コミット対象）
+- `results/summary.json` — 集計のみ、**実メールアドレスなし**（コミット対象）；`since` フィールドで今回のスキャン範囲を記録
 - `results/card.svg` — プロフィール埋め込み用ステータスカード（コミット対象）
 - `results/leaks.json` — 実アドレスを含む詳細データ（**.gitignore 済み、絶対にコミットしない**）
 
@@ -83,8 +84,14 @@ pip install -r requirements.txt
 ### macOS / Linux
 
 ```bash
-# noreply以外の全メールアドレスをスキャン（ユーザー名とトークンを置き換えてください）
+# 前回スキャン以降のコミットだけを対象にする（デフォルト — summary.json から自動読み込み）
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --verbose
+
+# 前回の結果を無視して全コミットをスキャン
+GH_PAT=ghp_... python scan.py YOUR_USERNAME --full
+
+# 指定した日時以降のコミットをスキャン
+GH_PAT=ghp_... python scan.py YOUR_USERNAME --since 2026-01-01T00:00:00Z
 
 # 特定のメールアドレスだけを検出
 GH_PAT=ghp_... python scan.py YOUR_USERNAME --email your@example.com
@@ -107,8 +114,14 @@ GH_PAT=ghp_... python scan.py YOUR_USERNAME --max-commits 2000
 ```powershell
 $env:GH_PAT = "ghp_..."
 
-# noreply以外の全メールアドレスをスキャン
+# 前回スキャン以降のコミットだけを対象にする（デフォルト）
 python scan.py YOUR_USERNAME --verbose
+
+# 前回の結果を無視して全コミットをスキャン
+python scan.py YOUR_USERNAME --full
+
+# 指定した日時以降のコミットをスキャン
+python scan.py YOUR_USERNAME --since 2026-01-01T00:00:00Z
 
 # 特定のメールアドレスだけを検出
 python scan.py YOUR_USERNAME --email your@example.com
@@ -130,7 +143,12 @@ python scan.py YOUR_USERNAME --max-commits 2000
 
 ```cmd
 set GH_PAT=ghp_...
+
+REM 前回スキャン以降のコミットだけを対象にする（デフォルト）
 python scan.py YOUR_USERNAME --verbose
+
+REM 前回の結果を無視して全コミットをスキャン
+python scan.py YOUR_USERNAME --full
 
 python generate_card.py
 ```
