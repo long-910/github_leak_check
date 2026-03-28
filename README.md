@@ -119,6 +119,58 @@ python generate_card.py
 
 ---
 
+## Fixing leaks
+
+After running `scan.py`, use `fix.py` to replace leaked addresses.
+
+```bash
+python fix.py
+```
+
+It will prompt you for a replacement email for each leaked address.
+The recommended format is `ID+USERNAME@users.noreply.github.com`
+(find your numeric ID at `https://api.github.com/users/USERNAME`).
+
+**What fix.py does:**
+
+| Step | Action | Safe? |
+|---|---|---|
+| 1 | Generate/update `.mailmap` — rewrites `git log` display | ✅ Safe |
+| 2 | Replace emails in local working-tree files | ✅ Safe |
+| 3 | Rewrite git history with `git filter-repo` | ⚠️ Destructive — opt-in only |
+| 4 | Print instructions for profile leaks | — Manual |
+
+### Specify replacements upfront
+
+```bash
+# macOS / Linux
+python fix.py --replace "old@example.com=12345+user@users.noreply.github.com"
+
+# Windows — PowerShell
+python fix.py --replace "old@example.com=12345+user@users.noreply.github.com"
+
+# Windows — Command Prompt
+python fix.py --replace "old@example.com=12345+user@users.noreply.github.com"
+```
+
+### Rewrite git history (destructive)
+
+```bash
+# Preview first
+python fix.py --dry-run --rewrite
+
+# Apply — cannot be undone without a backup
+python fix.py --rewrite
+
+# Then force-push
+git push --force-with-lease origin main
+```
+
+> **Warning:** History rewrite requires all collaborators to re-clone or rebase.
+> `git-filter-repo` is installed automatically via `pip install -r requirements.txt`.
+
+---
+
 ## Safe email patterns (not flagged)
 
 | Pattern | Example |

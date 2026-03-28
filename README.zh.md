@@ -119,6 +119,51 @@ python generate_card.py
 
 ---
 
+## 修复泄露
+
+运行 `scan.py` 后，使用 `fix.py` 替换泄露的邮件地址。
+
+```bash
+python fix.py
+```
+
+工具会提示你为每个泄露地址输入替换邮件。
+推荐使用 `ID+USERNAME@users.noreply.github.com` 格式
+（在 `https://api.github.com/users/USERNAME` 可以找到你的数字 ID）。
+
+**fix.py 的修复步骤：**
+
+| 步骤 | 操作 | 安全性 |
+|---|---|---|
+| 1 | 生成/更新 `.mailmap` — 重写 `git log` 显示 | ✅ 安全 |
+| 2 | 替换本地工作区文件中的邮件地址 | ✅ 安全 |
+| 3 | 使用 `git filter-repo` 重写 git 历史 | ⚠️ 破坏性 — 需主动启用 |
+| 4 | 打印 Profile 泄露的手动修复说明 | — 手动操作 |
+
+### 提前指定替换地址
+
+```bash
+python fix.py --replace "old@example.com=12345+user@users.noreply.github.com"
+```
+
+### 重写 git 历史（破坏性操作）
+
+```bash
+# 先预览
+python fix.py --dry-run --rewrite
+
+# 确认后执行（无法撤销，请先备份）
+python fix.py --rewrite
+
+# 然后强制推送
+git push --force-with-lease origin main
+```
+
+> **警告：** 历史重写后，所有协作者需重新克隆或 rebase。
+> `git-filter-repo` 已包含在 `requirements.txt` 中，运行 `pip install -r requirements.txt` 即可安装。
+
+---
+
 ## 安全邮件模式（不会被标记）
 
 | 模式 | 示例 |
