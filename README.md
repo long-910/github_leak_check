@@ -42,12 +42,17 @@ Go to **GitHub → Settings → Developer settings → Personal access tokens �
 
 > Classic PAT: `repo` + `read:user` scopes work too.
 
-### 3. Add the token as a repo secret
+### 3. Add secrets to the repo
 
 In your fork: **Settings → Secrets and variables → Actions → New repository secret**
 
-- Name: `GH_PAT`
-- Value: the token from step 2
+| Secret name | Required | Value |
+|---|---|---|
+| `GH_PAT` | Yes | The token from step 2 |
+| `TARGET_EMAILS` | No | Comma-separated addresses to watch, e.g. `you@work.com,old@isp.net` |
+
+If `TARGET_EMAILS` is not set, the scanner flags **all** non-noreply addresses found in your repos.
+If it is set, only those specific addresses are reported.
 
 ### 4. Enable Actions
 

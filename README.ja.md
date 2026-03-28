@@ -42,12 +42,17 @@ GitHub Actions があなたの身元で実行されるよう、自分のアカ�
 
 > クラシック PAT の場合：`repo` + `read:user` スコープで動作します。
 
-### 3. トークンをリポジトリシークレットに登録
+### 3. シークレットをリポジトリに登録
 
 フォークしたリポジトリで：**Settings → Secrets and variables → Actions → New repository secret**
 
-- 名前：`GH_PAT`
-- 値：手順 2 で作成したトークン
+| シークレット名 | 必須 | 値 |
+|---|---|---|
+| `GH_PAT` | 必須 | 手順 2 で作成したトークン |
+| `TARGET_EMAILS` | 任意 | 監視するメールアドレス（カンマ区切り）例：`you@work.com,old@isp.net` |
+
+`TARGET_EMAILS` を設定しない場合、スキャナーはリポジトリ内の**すべての**非 noreply アドレスを報告します。
+設定した場合は、指定したアドレスだけを検出対象にします。
 
 ### 4. Actions を有効化
 

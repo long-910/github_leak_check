@@ -28,16 +28,19 @@ jobs:
         run: pip install -r requirements.txt
 
       # ── Run scanner ───────────────────────────────────────────────────────
-      # GH_PAT: Personal Access Token stored as a repo secret.
-      # Required scopes: repo (or public_repo for public repos only) + read:user
-      # If GH_PAT is not set, falls back to GITHUB_TOKEN (limited scope).
-      # "|| true" ensures the workflow continues even when leaks are found
-      # (scan.py exits 1 on leaks so the card still gets generated).
+      # GH_PAT        : Personal Access Token (repo + read:user scopes).
+      #                 Falls back to GITHUB_TOKEN if not set (limited scope).
+      # TARGET_EMAILS : Optional comma-separated list of email addresses to
+      #                 check specifically, e.g. "you@work.com,old@isp.net".
+      #                 Leave unset to flag all non-noreply addresses.
+      # "|| true" lets the workflow continue when leaks are found
+      # (scan.py exits 1 on leaks, so the card must still be generated).
       - name: Run scanner
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_USERNAME: ${{ github.repository_owner }}
+          TARGET_EMAILS: ${{ secrets.TARGET_EMAILS }}
         run: python scan.py --verbose || true
 
       - name: Generate status card

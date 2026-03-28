@@ -42,12 +42,17 @@ Fork 到你自己的账号，这样 GitHub Actions 将以你的身份运行。
 
 > 经典 PAT 也可用：勾选 `repo` + `read:user` 权限。
 
-### 3. 将 Token 添加为仓库密钥
+### 3. 将密钥添加到仓库
 
 在你的 Fork 中：**Settings → Secrets and variables → Actions → New repository secret**
 
-- 名称：`GH_PAT`
-- 值：第 2 步创建的 Token
+| 密钥名称 | 是否必填 | 值 |
+|---|---|---|
+| `GH_PAT` | 必填 | 第 2 步创建的 Token |
+| `TARGET_EMAILS` | 选填 | 要监测的邮件地址（逗号分隔），例如 `you@work.com,old@isp.net` |
+
+若未设置 `TARGET_EMAILS`，扫描器会标记仓库中**所有**非 noreply 邮件地址。
+若已设置，则只报告这些特定地址的泄露情况。
 
 ### 4. 启用 Actions
 

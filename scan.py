@@ -426,7 +426,13 @@ Output files:
     if not args.token:
         _print("WARNING: No token provided. Rate limit is 60 req/hr. Large repos may fail.")
 
-    target_emails = set(args.email) if args.email else None
+    # Merge --email args with TARGET_EMAILS env var (comma-separated)
+    env_emails = [
+        e.strip()
+        for e in os.environ.get("TARGET_EMAILS", "").split(",")
+        if e.strip()
+    ]
+    target_emails = set(args.email) | set(env_emails) or None
 
     if target_emails:
         _print(f"Scanning @{username} for specific address(es): {', '.join(sorted(target_emails))}")
