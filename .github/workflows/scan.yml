@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write           # needed to push summary.json + card.svg back
+  actions: write            # needed to cancel the run when rate limited
 
 jobs:
   scan:
@@ -28,22 +29,37 @@ jobs:
         run: pip install -r requirements.txt
 
       # ── Run scanner ───────────────────────────────────────────────────────
-      # GH_PAT        : Personal Access Token (repo + read:user scopes).
-      #                 Falls back to GITHUB_TOKEN if not set (limited scope).
-      # TARGET_EMAILS : Optional comma-separated list of email addresses to
-      #                 check specifically, e.g. "you@work.com,old@isp.net".
-      #                 Leave unset to flag all non-noreply addresses.
-      # "|| true" lets the workflow continue when leaks are found
-      # (scan.py exits 1 on leaks, so the card must still be generated).
+      # GH_PAT         : Personal Access Token (repo + read:user scopes).
+      #                  Falls back to GITHUB_TOKEN if not set (limited scope).
+      # TARGET_EMAILS  : Optional comma-separated list of addresses to check.
+      #                  Leave unset to flag all non-noreply addresses.
+      # --max-rate-wait: Abort (exit 2) instead of sleeping more than N seconds.
+      #                  Keeps CI minutes from being wasted on idle waits.
       - name: Run scanner
+        id: scan
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_USERNAME: ${{ github.repository_owner }}
           TARGET_EMAILS: ${{ secrets.TARGET_EMAILS }}
-        run: python scan.py --verbose || true
+        run: |
+          set +e
+          python scan.py --verbose --max-rate-wait 60
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      # ── Cancel if rate limited ────────────────────────────────────────────
+      # exit code 2 means rate limited; cancel the run immediately so no
+      # further Actions minutes are consumed sitting in a sleep loop.
+      - name: Cancel run if rate limited
+        if: steps.scan.outputs.exit_code == '2'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Rate limited — cancelling run ${{ github.run_id }} to save CI minutes."
+          gh run cancel "${{ github.run_id }}"
 
       - name: Generate status card
+        if: steps.scan.outputs.exit_code != '2'
         run: python generate_card.py
 
       # ── Commit results ────────────────────────────────────────────────────
@@ -51,6 +67,7 @@ jobs:
       # [skip ci] prevents an infinite push → trigger → push loop.
       # leaks.json is gitignored and will never be staged here.
       - name: Commit results
+        if: steps.scan.outputs.exit_code != '2'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
