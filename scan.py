@@ -359,7 +359,7 @@ class LeakScanner:
             "username": username,
             "scanned_at": datetime.now(timezone.utc).isoformat(),
             "since": self.since,
-            "target_emails": sorted(self.target_emails) if self.target_emails else None,
+            "target_email_count": len(self.target_emails) if self.target_emails else None,
             "repos_scanned": self.stats["repos_scanned"],
             "commits_scanned": self.stats["commits_scanned"],
             "files_scanned": self.stats["files_scanned"],
