@@ -1,0 +1,126 @@
+name: 'GitHub Email Leak Check'
+description: 'Scan GitHub commits, file contents, and profiles for leaked non-noreply email addresses'
+author: 'long-910'
+
+branding:
+  icon: 'search'
+  color: 'blue'
+
+inputs:
+  github-token:
+    description: >
+      Personal Access Token with repo + read:user scopes (or fine-grained:
+      Contents read, Metadata read, Email addresses read).
+      Use secrets.GH_PAT for cross-repo scanning.
+    required: true
+
+  username:
+    description: 'GitHub username to scan. Defaults to the repository owner.'
+    required: false
+    default: ''
+
+  target-emails:
+    description: >
+      Comma-separated email addresses to watch specifically.
+      Leave empty to flag ALL non-noreply addresses.
+    required: false
+    default: ''
+
+  max-commits:
+    description: 'Maximum commits to scan per repository.'
+    required: false
+    default: '500'
+
+  include-forks:
+    description: 'Set to "true" to also scan forked repositories.'
+    required: false
+    default: 'false'
+
+  no-files:
+    description: 'Set to "true" to skip file content scanning (faster).'
+    required: false
+    default: 'false'
+
+  full-scan:
+    description: >
+      Set to "true" to ignore the previous scan timestamp and scan all commits.
+      By default the action only scans commits after the last run.
+    required: false
+    default: 'false'
+
+  max-rate-wait:
+    description: >
+      Maximum seconds to wait when rate limited before aborting with exit code 2.
+      Keep low in CI (e.g. 60) to avoid wasting Actions minutes.
+    required: false
+    default: '60'
+
+  output-dir:
+    description: 'Directory (relative to workspace) for output files.'
+    required: false
+    default: 'results'
+
+outputs:
+  status:
+    description: 'Scan result: CLEAN | LEAKS_FOUND | RATE_LIMITED | ERROR'
+    value: ${{ steps.scan.outputs.status }}
+  leak-count:
+    description: 'Total number of leaks detected.'
+    value: ${{ steps.scan.outputs.leak_count }}
+  exit-code:
+    description: 'Raw exit code: 0=clean, 1=leaks found, 2=rate limited.'
+    value: ${{ steps.scan.outputs.exit_code }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      shell: bash
+      run: pip install requests git-filter-repo
+
+    - name: Run scanner
+      id: scan
+      shell: bash
+      env:
+        GH_PAT: ${{ inputs.github-token }}
+        GITHUB_USERNAME: ${{ inputs.username != '' && inputs.username || github.repository_owner }}
+        TARGET_EMAILS: ${{ inputs.target-emails }}
+      run: |
+        set +e
+
+        ARGS="--verbose"
+        ARGS="$ARGS --max-rate-wait ${{ inputs.max-rate-wait }}"
+        ARGS="$ARGS --max-commits ${{ inputs.max-commits }}"
+        ARGS="$ARGS --output-dir ${{ inputs.output-dir }}"
+
+        [ "${{ inputs.include-forks }}" = "true" ] && ARGS="$ARGS --include-forks"
+        [ "${{ inputs.no-files }}"      = "true" ] && ARGS="$ARGS --no-files"
+        [ "${{ inputs.full-scan }}"     = "true" ] && ARGS="$ARGS --full"
+
+        python "${{ github.action_path }}/scan.py" $ARGS
+        SCAN_EXIT=$?
+        echo "exit_code=$SCAN_EXIT" >> "$GITHUB_OUTPUT"
+
+        SUMMARY="${{ inputs.output-dir }}/summary.json"
+        if [ -f "$SUMMARY" ]; then
+          STATUS=$(python -c "import json,sys; d=json.load(open('$SUMMARY')); print(d.get('status','ERROR'))")
+          LEAKS=$(python  -c "import json,sys; d=json.load(open('$SUMMARY')); print(d.get('leak_count',0))")
+          echo "status=$STATUS"     >> "$GITHUB_OUTPUT"
+          echo "leak_count=$LEAKS"  >> "$GITHUB_OUTPUT"
+        else
+          echo "status=ERROR"    >> "$GITHUB_OUTPUT"
+          echo "leak_count=0"    >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Generate status card
+      if: steps.scan.outputs.exit_code != '2'
+      shell: bash
+      run: |
+        python "${{ github.action_path }}/generate_card.py" \
+          --summary "${{ inputs.output-dir }}/summary.json" \
+          --output  "${{ inputs.output-dir }}/card.svg"
