@@ -24,6 +24,39 @@ Scan GitHub commits, file contents, and user profiles for non-`noreply` email ad
 
 ---
 
+## 🚀 Recommended: use as a GitHub Action (3 steps, no local setup)
+
+> **This is the recommended way to use this tool.**
+> Fork → add a secret → done. Scans run automatically every day and the status card on your profile updates itself.
+
+### Step 1 — Fork this repo
+
+Click **Fork** at the top-right of this page. GitHub Actions will run under your own identity.
+
+### Step 2 — Add your Personal Access Token as a secret
+
+1. Create a PAT at **Settings → Developer settings → Personal access tokens → Fine-grained tokens**
+   with **Contents** (read), **Metadata** (read), **Email addresses** (read) permissions.
+2. In your fork go to **Settings → Secrets and variables → Actions → New repository secret**
+   and add it as `GH_PAT`.
+
+> Optionally add `TARGET_EMAILS` (comma-separated) to watch specific addresses only.
+
+### Step 3 — Enable Actions & embed the card
+
+Go to the **Actions** tab in your fork and enable workflows.
+The first scan runs immediately on push to `main`, then every day at 03:00 UTC automatically.
+
+Embed the live status card in your profile README (`USERNAME/USERNAME`):
+
+```markdown
+![Email Leak Scan](https://raw.githubusercontent.com/USERNAME/github_leak_check/main/results/card.svg)
+```
+
+**That's it.** No local Python environment needed. Results are auto-committed back to your fork.
+
+---
+
 ## 🔍 How it works
 
 ```mermaid
@@ -94,9 +127,9 @@ results/
 
 ---
 
-## ⚡ Use as a GitHub Action
+## ⚙️ GitHub Actions — advanced configuration
 
-Add to any repository's workflow in two lines:
+Use in any repository's workflow with just two lines:
 
 ```yaml
 - uses: actions/checkout@v4
@@ -177,7 +210,7 @@ jobs:
 
 ---
 
-## 🛠️ Setup (self-hosted / fork)
+## 🛠️ Setup details
 
 ```mermaid
 flowchart LR
@@ -187,13 +220,7 @@ flowchart LR
     D --> E([5. Embed card])
 ```
 
-### 1. Fork this repo
-
-Fork to your own account so GitHub Actions runs under your identity.
-
-### 2. Create a Personal Access Token
-
-Go to **GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens** and create a token with:
+### PAT permissions required
 
 | Permission | Access |
 |---|---|
@@ -203,37 +230,25 @@ Go to **GitHub → Settings → Developer settings → Personal access tokens �
 
 > Classic PAT: `repo` + `read:user` scopes work too.
 
-### 3. Add secrets to the repo
-
-In your fork: **Settings → Secrets and variables → Actions → New repository secret**
+### Secrets
 
 | Secret name | Required | Value |
 |---|---|---|
-| `GH_PAT` | ✅ | The token from step 2 |
+| `GH_PAT` | ✅ | Fine-grained PAT (see above) |
 | `TARGET_EMAILS` | — | Comma-separated addresses to watch, e.g. `you@work.com,old@isp.net` |
 
-> If `TARGET_EMAILS` is not set, the scanner flags **all** non-noreply addresses.
+> If `TARGET_EMAILS` is not set, the scanner flags **all** non-noreply addresses found.
 > If it is set, only those specific addresses are reported.
 
-### 4. Enable Actions
-
-Go to the **Actions** tab in your fork and enable workflows if prompted.
 The scan runs automatically every day at 03:00 UTC and on every push to `main`.
-You can also trigger it manually from the Actions tab.
-
-### 5. Embed the card in your profile README
-
-Add this line to your `USERNAME/USERNAME` profile repository README:
-
-```markdown
-![Email Leak Scan](https://raw.githubusercontent.com/USERNAME/github_leak_check/main/results/card.svg)
-```
-
-Replace `USERNAME` with your actual GitHub username.
+You can also trigger it manually from the **Actions** tab → **Email Leak Scan** → **Run workflow**.
 
 ---
 
-## 💻 Run locally
+## 💻 Run locally (advanced / debugging)
+
+> Most users should use the GitHub Actions approach above — no local setup required.
+> Run locally only if you want to test before committing, or debug scan results.
 
 First, install dependencies:
 
