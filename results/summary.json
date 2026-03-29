@@ -1,18 +1,14 @@
 {
   "username": "long-910",
-  "scanned_at": "2026-03-28T17:34:11.096240+00:00",
-  "since": null,
-  "target_emails": [
-    "910.long@gmail.com"
-  ],
+  "scanned_at": "2026-03-29T02:29:12.183630+00:00",
+  "since": "2026-03-28T17:34:11.096240+00:00",
+  "target_email_count": 1,
   "repos_scanned": 39,
-  "commits_scanned": 1088,
-  "files_scanned": 763,
-  "leak_count": 45,
+  "commits_scanned": 4,
+  "files_scanned": 766,
+  "leak_count": 3,
   "leak_by_surface": {
-    "commit_author": 25,
-    "commit_committer": 18,
-    "file_content": 2
+    "file_content": 3
   },
   "status": "LEAKS_FOUND"
 }
