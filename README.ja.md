@@ -24,6 +24,39 @@ GitHub のコミット履歴・ファイル内容・プロフィールから `no
 
 ---
 
+## 🚀 推奨：GitHub Action として使う（3ステップ、ローカル環境不要）
+
+> **これがこのツールの推奨の使い方です。**
+> Fork → Secret を追加 → 完了。毎日自動でスキャンが走り、プロフィールのステータスカードも自動更新されます。
+
+### ステップ 1 — このリポジトリをフォーク
+
+ページ右上の **Fork** をクリック。GitHub Actions があなたの身元で実行されます。
+
+### ステップ 2 — Personal Access Token を Secret として登録
+
+1. **Settings → Developer settings → Personal access tokens → Fine-grained tokens** で
+   **Contents**（読み取り）・**Metadata**（読み取り）・**Email addresses**（読み取り）権限のトークンを作成。
+2. フォークした自分のリポジトリで **Settings → Secrets and variables → Actions → New repository secret** を開き、
+   `GH_PAT` という名前で保存。
+
+> オプション：特定のアドレスだけを監視したい場合は `TARGET_EMAILS`（カンマ区切り）も追加。
+
+### ステップ 3 — Actions を有効にしてカードを埋め込む
+
+Fork の **Actions** タブを開いてワークフローを有効化。
+`main` ブランチへの push 時に即座に実行され、以降は毎日 03:00 UTC に自動スキャンされます。
+
+プロフィール README（`USERNAME/USERNAME`）にライブカードを埋め込む：
+
+```markdown
+![メール漏洩スキャン](https://raw.githubusercontent.com/USERNAME/github_leak_check/main/results/card.svg)
+```
+
+**以上です。** ローカルの Python 環境は不要。結果は自動的にあなたの Fork へコミットされます。
+
+---
+
 ## 🔍 動作の仕組み
 
 ```mermaid
@@ -94,7 +127,7 @@ results/
 
 ---
 
-## ⚡ GitHub Action として使う
+## ⚙️ GitHub Actions — 詳細設定
 
 任意のリポジトリのワークフローに2行で組み込めます：
 
@@ -177,7 +210,7 @@ jobs:
 
 ---
 
-## 🛠️ セットアップ（セルフホスト / Fork）
+## 🛠️ セットアップ詳細
 
 ```mermaid
 flowchart LR
@@ -187,13 +220,7 @@ flowchart LR
     D --> E([5. カードを埋め込む])
 ```
 
-### 1. このリポジトリをフォーク
-
-GitHub Actions があなたの身元で実行されるよう、自分のアカウントにフォークしてください。
-
-### 2. Personal Access Token を作成
-
-**GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens** で、以下の権限を持つトークンを作成します：
+### PAT に必要な権限
 
 | 権限 | アクセスレベル |
 |---|---|
@@ -203,37 +230,25 @@ GitHub Actions があなたの身元で実行されるよう、自分のアカ�
 
 > クラシック PAT の場合：`repo` + `read:user` スコープで動作します。
 
-### 3. シークレットをリポジトリに登録
-
-フォークしたリポジトリで：**Settings → Secrets and variables → Actions → New repository secret**
+### Secrets 一覧
 
 | シークレット名 | 必須 | 値 |
 |---|---|---|
-| `GH_PAT` | ✅ | 手順 2 で作成したトークン |
-| `TARGET_EMAILS` | — | 監視するメールアドレス（カンマ区切り）例：`you@work.com,old@isp.net` |
+| `GH_PAT` | ✅ | 上記の Fine-grained PAT |
+| `TARGET_EMAILS` | — | 監視するアドレス（カンマ区切り）例：`you@work.com,old@isp.net` |
 
 > `TARGET_EMAILS` を設定しない場合、スキャナーはリポジトリ内の**すべての**非 noreply アドレスを報告します。
 > 設定した場合は、指定したアドレスだけを検出対象にします。
 
-### 4. Actions を有効化
-
-フォークの **Actions** タブを開き、プロンプトが表示された場合はワークフローを有効化してください。
 スキャンは毎日 03:00 UTC と `main` ブランチへの push 時に自動実行されます。
-Actions タブから手動でトリガーすることも可能です。
-
-### 5. プロフィール README にカードを埋め込む
-
-`USERNAME/USERNAME` プロフィールリポジトリの README に以下を追記します：
-
-```markdown
-![メール漏洩スキャン](https://raw.githubusercontent.com/USERNAME/github_leak_check/main/results/card.svg)
-```
-
-`USERNAME` はあなたの GitHub ユーザー名に置き換えてください。
+**Actions** タブ → **Email Leak Scan** → **Run workflow** から手動トリガーも可能です。
 
 ---
 
-## 💻 ローカルで実行
+## 💻 ローカルで実行（上級者・デバッグ用）
+
+> ほとんどのユーザーは上記の GitHub Actions 方式を使ってください——ローカル環境は不要です。
+> コミット前に動作を確認したい場合や、スキャン結果をデバッグしたい場合のみローカル実行を使います。
 
 まず依存パッケージをインストールします：
 
