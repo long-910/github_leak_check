@@ -24,6 +24,39 @@
 
 ---
 
+## 🚀 推荐：作为 GitHub Action 使用（3 步，无需本地环境）
+
+> **这是本工具的推荐使用方式。**
+> Fork → 添加密钥 → 完成。每天自动扫描，Profile 状态卡片自动更新。
+
+### 第 1 步 — Fork 本仓库
+
+点击页面右上角的 **Fork**。GitHub Actions 将以你自己的身份运行。
+
+### 第 2 步 — 将 Personal Access Token 添加为 Secret
+
+1. 前往 **Settings → Developer settings → Personal access tokens → Fine-grained tokens**，
+   创建具有 **Contents**（读取）、**Metadata**（读取）、**Email addresses**（读取）权限的 Token。
+2. 在你的 Fork 中前往 **Settings → Secrets and variables → Actions → New repository secret**，
+   将 Token 保存为 `GH_PAT`。
+
+> 可选：添加 `TARGET_EMAILS`（逗号分隔）以仅监测特定邮件地址。
+
+### 第 3 步 — 启用 Actions 并嵌入卡片
+
+前往 Fork 的 **Actions** 标签页并启用工作流。
+首次推送到 `main` 分支时立即触发扫描，之后每天 03:00 UTC 自动运行。
+
+将动态状态卡片嵌入你的主页 README（`USERNAME/USERNAME`）：
+
+```markdown
+![邮件泄露扫描](https://raw.githubusercontent.com/USERNAME/github_leak_check/main/results/card.svg)
+```
+
+**完成。** 无需本地 Python 环境，结果会自动提交回你的 Fork。
+
+---
+
 ## 🔍 工作原理
 
 ```mermaid
@@ -94,7 +127,7 @@ results/
 
 ---
 
-## ⚡ 作为 GitHub Action 使用
+## ⚙️ GitHub Actions — 高级配置
 
 在任意仓库的工作流中两行即可接入：
 
@@ -177,7 +210,7 @@ jobs:
 
 ---
 
-## 🛠️ 配置步骤（自托管 / Fork）
+## 🛠️ 配置详情
 
 ```mermaid
 flowchart LR
@@ -187,13 +220,7 @@ flowchart LR
     D --> E([5. 嵌入卡片])
 ```
 
-### 1. Fork 本仓库
-
-Fork 到你自己的账号，这样 GitHub Actions 将以你的身份运行。
-
-### 2. 创建 Personal Access Token
-
-前往 **GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens**，创建具有以下权限的 Token：
+### PAT 所需权限
 
 | 权限 | 访问级别 |
 |---|---|
@@ -203,37 +230,25 @@ Fork 到你自己的账号，这样 GitHub Actions 将以你的身份运行。
 
 > 经典 PAT 也可用：勾选 `repo` + `read:user` 权限。
 
-### 3. 将密钥添加到仓库
-
-在你的 Fork 中：**Settings → Secrets and variables → Actions → New repository secret**
+### Secrets 说明
 
 | 密钥名称 | 是否必填 | 值 |
 |---|---|---|
-| `GH_PAT` | ✅ | 第 2 步创建的 Token |
+| `GH_PAT` | ✅ | 上述 Fine-grained PAT |
 | `TARGET_EMAILS` | — | 要监测的邮件地址（逗号分隔），例如 `you@work.com,old@isp.net` |
 
 > 若未设置 `TARGET_EMAILS`，扫描器会标记仓库中**所有**非 noreply 邮件地址。
 > 若已设置，则只报告这些特定地址的泄露情况。
 
-### 4. 启用 Actions
-
-前往 Fork 的 **Actions** 标签页，按提示启用工作流。
 扫描将在每天 03:00 UTC 及每次推送到 `main` 分支时自动执行。
-也可在 Actions 标签页手动触发。
-
-### 5. 在 Profile README 中嵌入状态卡片
-
-在你的 `USERNAME/USERNAME` 主页仓库的 README 中添加以下内容：
-
-```markdown
-![邮件泄露扫描](https://raw.githubusercontent.com/USERNAME/github_leak_check/main/results/card.svg)
-```
-
-将 `USERNAME` 替换为你的 GitHub 用户名。
+也可在 **Actions** 标签页 → **Email Leak Scan** → **Run workflow** 手动触发。
 
 ---
 
-## 💻 本地运行
+## 💻 本地运行（进阶 / 调试用）
+
+> 大多数用户应使用上方的 GitHub Actions 方式——无需本地环境。
+> 仅在提交前测试或调试扫描结果时才需要本地运行。
 
 首先安装依赖：
 

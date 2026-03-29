@@ -44,7 +44,15 @@ inputs:
   full-scan:
     description: >
       Set to "true" to ignore the previous scan timestamp and scan all commits.
-      By default the action only scans commits after the last run.
+      Also resets accumulated commit leak fingerprints (same effect as reset-commits).
+      Use only when you need a complete historical re-scan.
+    required: false
+    default: 'false'
+
+  reset-commits:
+    description: >
+      Set to "true" to clear all accumulated commit leak fingerprints and start fresh.
+      Use after running git filter-repo to verify the history rewrite was effective.
     required: false
     default: 'false'
 
@@ -98,9 +106,10 @@ runs:
         ARGS="$ARGS --max-commits ${{ inputs.max-commits }}"
         ARGS="$ARGS --output-dir ${{ inputs.output-dir }}"
 
-        [ "${{ inputs.include-forks }}" = "true" ] && ARGS="$ARGS --include-forks"
-        [ "${{ inputs.no-files }}"      = "true" ] && ARGS="$ARGS --no-files"
-        [ "${{ inputs.full-scan }}"     = "true" ] && ARGS="$ARGS --full"
+        [ "${{ inputs.include-forks }}"  = "true" ] && ARGS="$ARGS --include-forks"
+        [ "${{ inputs.no-files }}"       = "true" ] && ARGS="$ARGS --no-files"
+        [ "${{ inputs.full-scan }}"      = "true" ] && ARGS="$ARGS --full"
+        [ "${{ inputs.reset-commits }}"  = "true" ] && ARGS="$ARGS --reset-commits"
 
         python "${{ github.action_path }}/scan.py" $ARGS
         SCAN_EXIT=$?

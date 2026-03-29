@@ -14,6 +14,7 @@ Environment variables:
 """
 
 import base64
+import hashlib
 import json
 import os
 import re
@@ -69,6 +70,13 @@ class RateLimitExceeded(Exception):
             f"Rate limit requires waiting {wait_seconds:.0f}s "
             f"(exceeds --max-rate-wait). Stopping to avoid wasting CI minutes."
         )
+
+
+def _commit_key(repo: str, role: str, email: str) -> str:
+    """Return a stable, email-free fingerprint for a commit leak.
+    Safe to store in summary.json (committed to the repo)."""
+    raw = f"{repo}:{role}:{email.lower()}".encode()
+    return hashlib.sha256(raw).hexdigest()[:16]
 
 
 def redact(email: str) -> str:
@@ -213,6 +221,7 @@ class LeakScanner:
         target_emails: Optional[set[str]] = None,
         since: Optional[str] = None,
         include_forks: bool = False,
+        prev_commit_keys: Optional[set[str]] = None,
     ):
         self.client = client
         self.max_commits = max_commits
@@ -231,6 +240,9 @@ class LeakScanner:
             "commits_scanned": 0,
             "files_scanned": 0,
         }
+        # Accumulated fingerprints of commit leaks across all previous runs.
+        # Keys are email-free hashes; safe to store in committed summary.json.
+        self._commit_keys: set[str] = set(prev_commit_keys or [])
 
     def _is_target(self, email: str) -> bool:
         """Return True if this email should be reported as a leak."""
@@ -258,7 +270,6 @@ class LeakScanner:
 
     def scan_commits(self, repo_name: str):
         count = 0
-        seen: set[str] = set()
         for commit in self.client.get_commits(repo_name, since=self.since):
             if count >= self.max_commits:
                 break
@@ -275,10 +286,10 @@ class LeakScanner:
                 if not email or not self._is_target(email):
                     continue
 
-                key = f"{repo_name}:{role}:{email}"
-                if key in seen:
-                    continue
-                seen.add(key)
+                key = _commit_key(repo_name, role, email)
+                if key in self._commit_keys:
+                    continue  # already seen in this or a previous run
+                self._commit_keys.add(key)
 
                 self._add_leak({
                     "surface": f"commit_{role}",
@@ -350,10 +361,13 @@ class LeakScanner:
             if self.scan_files:
                 self.scan_file_contents(full_name, branch)
 
-        # Build summary (no real emails)
-        leak_by_surface: dict[str, int] = {}
-        for leak in self.leaks:
-            leak_by_surface[leak["surface"]] = leak_by_surface.get(leak["surface"], 0) + 1
+        # Build summary (no real emails).
+        # commit leaks: accumulated across all runs via _commit_keys.
+        # file / profile leaks: always reflect current state (fresh each run).
+        file_leaks = sum(1 for l in self.leaks if l["surface"] == "file_content")
+        profile_leaked = any(l["surface"] == "profile" for l in self.leaks)
+        commit_leak_count = len(self._commit_keys)
+        total_leak_count = commit_leak_count + file_leaks + (1 if profile_leaked else 0)
 
         summary = {
             "username": username,
@@ -363,9 +377,14 @@ class LeakScanner:
             "repos_scanned": self.stats["repos_scanned"],
             "commits_scanned": self.stats["commits_scanned"],
             "files_scanned": self.stats["files_scanned"],
-            "leak_count": len(self.leaks),
-            "leak_by_surface": leak_by_surface,
-            "status": "CLEAN" if not self.leaks else "LEAKS_FOUND",
+            # Accumulated fingerprints for commit leaks (email-free, safe to commit).
+            # Persisted across incremental runs so old commit leaks are never lost.
+            "commit_leak_keys": sorted(self._commit_keys),
+            "commit_leak_count": commit_leak_count,
+            "file_leak_count": file_leaks,
+            "profile_leaked": profile_leaked,
+            "leak_count": total_leak_count,
+            "status": "CLEAN" if total_leak_count == 0 else "LEAKS_FOUND",
         }
 
         return {"summary": summary, "leaks": self.leaks}
@@ -445,7 +464,15 @@ Output files:
     parser.add_argument(
         "--full",
         action="store_true",
-        help="Ignore previous scan time and scan all commits.",
+        help="Ignore previous scan time and scan all commits. Also resets accumulated commit leak keys.",
+    )
+    parser.add_argument(
+        "--reset-commits",
+        action="store_true",
+        help=(
+            "Clear all accumulated commit leak fingerprints and start fresh. "
+            "Use after running git filter-repo to verify the history rewrite was effective."
+        ),
     )
     parser.add_argument(
         "--include-forks",
@@ -499,10 +526,16 @@ Output files:
     else:
         _print(f"Scanning @{username} for all non-noreply email leaks...")
 
-    # Determine incremental scan start time
+    # Determine incremental scan start time and load accumulated commit keys.
     since: Optional[str] = None
-    if args.full:
-        _print("--full specified: scanning all commits.")
+    prev_commit_keys: set[str] = set()
+
+    reset = args.full or args.reset_commits
+    if reset:
+        if args.full:
+            _print("--full specified: scanning all commits, resetting accumulated commit leak state.")
+        else:
+            _print("--reset-commits specified: clearing accumulated commit leak fingerprints.")
     elif args.since:
         since = args.since
         _print(f"Scanning commits after: {since}  (--since)")
@@ -514,6 +547,9 @@ Output files:
                 since = prev.get("scanned_at")
                 if since:
                     _print(f"Scanning commits after: {since}  (previous scan)")
+                prev_commit_keys = set(prev.get("commit_leak_keys", []))
+                if prev_commit_keys:
+                    _print(f"Loaded {len(prev_commit_keys)} accumulated commit leak fingerprint(s) from previous scan.")
             except Exception:
                 pass
         if not since:
@@ -527,6 +563,7 @@ Output files:
         target_emails=target_emails,
         include_forks=args.include_forks,
         since=since,
+        prev_commit_keys=prev_commit_keys,
     )
 
     try:
@@ -541,8 +578,12 @@ Output files:
             "repos_scanned": scanner.stats["repos_scanned"],
             "commits_scanned": scanner.stats["commits_scanned"],
             "files_scanned": scanner.stats["files_scanned"],
-            "leak_count": len(scanner.leaks),
-            "leak_by_surface": {},
+            # Preserve accumulated keys even on partial runs
+            "commit_leak_keys": sorted(scanner._commit_keys),
+            "commit_leak_count": len(scanner._commit_keys),
+            "file_leak_count": 0,
+            "profile_leaked": False,
+            "leak_count": len(scanner._commit_keys),
             "status": "RATE_LIMITED",
             "rate_limit_wait_needed": exc.wait_seconds,
         }
@@ -583,16 +624,27 @@ Output files:
     s = result["summary"]
     status_icon = "✅" if s["status"] == "CLEAN" else ("🚨" if s["status"] == "LEAKS_FOUND" else "⚠️")
     _print(f"\n{status_icon} Status: {s['status']}")
-    _print(f"   Repos scanned:   {s['repos_scanned']}")
-    _print(f"   Commits scanned: {s['commits_scanned']}")
-    _print(f"   Files scanned:   {s['files_scanned']}")
-    _print(f"   Leaks found:     {s['leak_count']}")
+    _print(f"   Repos scanned:     {s['repos_scanned']}")
+    _print(f"   Commits scanned:   {s['commits_scanned']}")
+    _print(f"   Files scanned:     {s['files_scanned']}")
+    _print(f"   Commit leaks (accumulated): {s['commit_leak_count']}")
+    _print(f"   File leaks (current):       {s['file_leak_count']}")
+    _print(f"   Profile leaked (current):   {s['profile_leaked']}")
+    _print(f"   Total leaks:       {s['leak_count']}")
 
     if result["leaks"]:
-        _print("\nLeaks detected (redacted):")
+        _print("\nNew leaks detected this run (redacted):")
         for leak in result["leaks"]:
             loc = leak.get("repo") or leak.get("location", "?")
             _print(f"  [{leak['surface']}] {loc}: {leak['redacted']}")
+
+    if s["leak_count"] > 0:
+        if s["commit_leak_count"] > 0 and not result["leaks"]:
+            _print(
+                "\nNote: no new leaks found this run, but previously detected commit leaks remain.\n"
+                "After fixing with git filter-repo, run:  python scan.py --reset-commits\n"
+                "to verify the fix and clear accumulated fingerprints."
+            )
         sys.exit(1)
 
 
