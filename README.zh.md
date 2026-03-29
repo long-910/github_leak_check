@@ -2,15 +2,53 @@
 
 **Language / 语言 / 言語:** [English](README.md) | 中文 | [日本語](README.ja.md)
 
+---
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.12-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![GitHub Actions](https://github.com/long-910/github_leak_check/actions/workflows/scan.yml/badge.svg)](https://github.com/long-910/github_leak_check/actions/workflows/scan.yml)
+[![GitHub release](https://img.shields.io/github/v/release/long-910/github_leak_check?color=green)](https://github.com/long-910/github_leak_check/releases)
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-Email%20Leak%20Check-blue?logo=github)](https://github.com/marketplace/actions/github-email-leak-check)
+
 扫描 GitHub 提交记录、文件内容和用户资料中的非 `noreply` 邮件地址，并将结果以动态徽章的形式展示在你的 GitHub 主页上。
 
 <!-- 状态卡片 — 由 GitHub Actions 每日自动更新 -->
 <!-- 将 USERNAME 替换为你的 GitHub 用户名后取消注释 -->
 <!-- ![扫描状态](https://raw.githubusercontent.com/USERNAME/github_leak_check/main/results/card.svg) -->
 
+> **状态卡片预览**
+>
+> | 安全 | 发现泄露 | 速率受限 | 错误 |
+> |:---:|:---:|:---:|:---:|
+> | ![clean](https://img.shields.io/badge/Email%20Leak-CLEAN-brightgreen) | ![leaks](https://img.shields.io/badge/Email%20Leak-LEAKS__FOUND-red) | ![ratelimit](https://img.shields.io/badge/Email%20Leak-RATE__LIMITED-blueviolet) | ![error](https://img.shields.io/badge/Email%20Leak-ERROR-orange) |
+
 ---
 
-## 背景与动机
+## 🔍 工作原理
+
+```mermaid
+flowchart TD
+    A([🚀 启动 scan.py]) --> B{存在上次\nsummary.json?}
+    B -->|是| C[⏩ 增量扫描\n仅检查新提交]
+    B -->|否 / --full| D[🔄 全量扫描\n检查所有提交]
+    C --> E
+    D --> E[👤 扫描 profile 邮件]
+    E --> F[📦 列出仓库\n默认排除 Fork]
+    F --> G[🔎 扫描提交\nauthor.email + committer.email]
+    G --> H{启用文件\n扫描?}
+    H -->|是| I[📄 扫描源文件\nREADME, package.json…]
+    H -->|否| J
+    I --> J[📊 汇总结果]
+    J --> K{发现\n泄露?}
+    K -->|是 🔴| L[leaks.json\nsummary.json\n红色 card.svg]
+    K -->|否 🟢| M[summary.json\n绿色 card.svg]
+    L --> N([退出码 1])
+    M --> O([退出码 0])
+```
+
+---
+
+## 📖 背景与动机
 
 ### "我已开启「保护邮件地址」设置，为什么还会收到与 GitHub 相关的垃圾邮件？"
 
@@ -34,23 +72,29 @@ GitHub 的 **"Keep my email addresses private"**（Settings → Emails）只对*
 
 ---
 
-## 功能说明
+## ✨ 功能说明
 
-1. **提交记录扫描** — 检查你所有仓库中每条提交的 `author.email` 和 `committer.email`
-2. **文件内容扫描** — 在 README、package.json、pyproject.toml 等文件中搜索邮件地址模式
-3. **资料页扫描** — 检查你的 GitHub 公开资料是否设置了邮件地址
-4. 将所有非 `@users.noreply.github.com`（及其他 bot/noreply）地址标记为潜在泄露
-5. **增量扫描** — 重复运行时，仅检查上次扫描时间戳之后的新提交
-6. **默认排除 Fork 仓库** — 除非指定 `--include-forks`，否则跳过所有 Fork 的仓库
+| # | 功能 | 说明 |
+|---|---|---|
+| 1 | **提交记录扫描** | 检查你所有仓库中每条提交的 `author.email` 和 `committer.email` |
+| 2 | **文件内容扫描** | 在 README、package.json、pyproject.toml 等文件中搜索邮件地址模式 |
+| 3 | **资料页扫描** | 检查你的 GitHub 公开资料是否设置了邮件地址 |
+| 4 | **智能过滤** | 将所有非 `@users.noreply.github.com` 地址标记为潜在泄露 |
+| 5 | **增量扫描** | 重复运行时，仅检查上次扫描时间戳之后的新提交 |
+| 6 | **默认排除 Fork** | 除非指定 `--include-forks`，否则跳过所有 Fork 的仓库 |
 
-输出文件说明：
-- `results/summary.json` — 汇总统计，**不含真实邮件地址**（会提交到仓库）；含 `since` 字段，记录本次扫描的起始时间
-- `results/card.svg` — 用于嵌入展示的状态卡片（会提交到仓库）
-- `results/leaks.json` — 包含真实地址的完整详情（**已加入 .gitignore，绝不提交**）
+**输出文件说明：**
+
+```
+results/
+├── summary.json   ← 汇总统计，不含真实邮件地址（会提交到仓库）
+├── card.svg       ← 用于嵌入展示的状态卡片（会提交到仓库）
+└── leaks.json     ← 包含真实地址的完整详情（.gitignore 中，绝不提交）
+```
 
 ---
 
-## 作为 GitHub Action 使用
+## ⚡ 作为 GitHub Action 使用
 
 在任意仓库的工作流中两行即可接入：
 
@@ -67,15 +111,15 @@ GitHub 的 **"Keep my email addresses private"**（Settings → Emails）只对*
 
 | 参数 | 必填 | 默认值 | 说明 |
 |---|---|---|---|
-| `github-token` | 是 | — | 具有 `repo` + `read:user` 权限的 PAT |
-| `username` | 否 | 仓库所有者 | 要扫描的 GitHub 用户名 |
-| `target-emails` | 否 | _(全部)_ | 逗号分隔的监测地址 |
-| `max-commits` | 否 | `500` | 每个仓库最多扫描的提交数 |
-| `include-forks` | 否 | `false` | 同时扫描 Fork 的仓库 |
-| `no-files` | 否 | `false` | 跳过文件内容扫描 |
-| `full-scan` | 否 | `false` | 忽略上次扫描时间戳 |
-| `max-rate-wait` | 否 | `60` | 超过 N 秒的等待则中止 |
-| `output-dir` | 否 | `results` | 输出目录 |
+| `github-token` | ✅ | — | 具有 `repo` + `read:user` 权限的 PAT |
+| `username` | — | 仓库所有者 | 要扫描的 GitHub 用户名 |
+| `target-emails` | — | _(全部)_ | 逗号分隔的监测地址 |
+| `max-commits` | — | `500` | 每个仓库最多扫描的提交数 |
+| `include-forks` | — | `false` | 同时扫描 Fork 的仓库 |
+| `no-files` | — | `false` | 跳过文件内容扫描 |
+| `full-scan` | — | `false` | 忽略上次扫描时间戳 |
+| `max-rate-wait` | — | `60` | 超过 N 秒的等待则中止 |
+| `output-dir` | — | `results` | 输出目录 |
 
 ### 输出
 
@@ -85,9 +129,63 @@ GitHub 的 **"Keep my email addresses private"**（Settings → Emails）只对*
 | `leak-count` | 检测到的泄露数量 |
 | `exit-code` | `0` 无泄露 · `1` 有泄露 · `2` 超出速率限制 |
 
+### 完整示例工作流
+
+```yaml
+name: Email Leak Check
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run scan
+        id: scan
+        uses: long-910/github_leak_check@v1
+        with:
+          github-token:  ${{ secrets.GH_PAT }}
+          target-emails: ${{ secrets.TARGET_EMAILS }}
+          max-rate-wait: '60'
+
+      - name: Cancel if rate limited
+        if: steps.scan.outputs.exit-code == '2'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh run cancel "${{ github.run_id }}"
+
+      - name: Commit results
+        if: steps.scan.outputs.exit-code != '2'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add results/summary.json results/card.svg
+          git diff --staged --quiet || \
+            git commit -m "chore: update scan results [skip ci]" && git push
+```
+
 ---
 
-## 配置步骤（自托管 / Fork）
+## 🛠️ 配置步骤（自托管 / Fork）
+
+```mermaid
+flowchart LR
+    A([1. Fork 仓库]) --> B([2. 创建 PAT])
+    B --> C([3. 添加 Secrets])
+    C --> D([4. 启用 Actions])
+    D --> E([5. 嵌入卡片])
+```
 
 ### 1. Fork 本仓库
 
@@ -111,11 +209,11 @@ Fork 到你自己的账号，这样 GitHub Actions 将以你的身份运行。
 
 | 密钥名称 | 是否必填 | 值 |
 |---|---|---|
-| `GH_PAT` | 必填 | 第 2 步创建的 Token |
-| `TARGET_EMAILS` | 选填 | 要监测的邮件地址（逗号分隔），例如 `you@work.com,old@isp.net` |
+| `GH_PAT` | ✅ | 第 2 步创建的 Token |
+| `TARGET_EMAILS` | — | 要监测的邮件地址（逗号分隔），例如 `you@work.com,old@isp.net` |
 
-若未设置 `TARGET_EMAILS`，扫描器会标记仓库中**所有**非 noreply 邮件地址。
-若已设置，则只报告这些特定地址的泄露情况。
+> 若未设置 `TARGET_EMAILS`，扫描器会标记仓库中**所有**非 noreply 邮件地址。
+> 若已设置，则只报告这些特定地址的泄露情况。
 
 ### 4. 启用 Actions
 
@@ -135,7 +233,7 @@ Fork 到你自己的账号，这样 GitHub Actions 将以你的身份运行。
 
 ---
 
-## 本地运行
+## 💻 本地运行
 
 首先安装依赖：
 
@@ -223,7 +321,60 @@ python generate_card.py
 
 ---
 
-## 检测到泄露后的处理方法
+## 🚨 检测到泄露后的处理方法
+
+```mermaid
+flowchart TD
+    A([发现泄露!]) --> B
+
+    subgraph STEP0 ["第 0 步 — 立即阻止新的泄露"]
+        B[启用 GitHub 隐私设置\n更新本地 git config]
+    end
+
+    STEP0 --> C
+
+    subgraph STEP1 ["第 1 步 — 找到 noreply 地址"]
+        C["格式：ID+USERNAME@users.noreply.github.com"]
+    end
+
+    STEP1 --> D{泄露\n位置?}
+
+    D -->|资料页| E
+
+    subgraph STEP2 ["第 2 步 — 修复资料页"]
+        E[GitHub Settings → Profile\n将 Public email 设为 None]
+    end
+
+    D -->|源文件| F
+
+    subgraph STEP3 ["第 3 步 — 修复文件"]
+        F["python fix.py\ngit commit && git push"]
+    end
+
+    D -->|提交历史| G{团队仓库\n或已归档?}
+    G -->|否| H
+
+    subgraph STEP4B ["第 4-B 步 — git filter-repo（永久修复）"]
+        H["python fix.py --rewrite\ngit push --force-with-lease"]
+    end
+
+    G -->|是| I
+
+    subgraph STEP4A ["第 4-A 步 — .mailmap（安全方式）"]
+        I["python fix.py\ngit add .mailmap && git push"]
+    end
+
+    E --> J
+    F --> J
+    H --> J
+    I --> J
+
+    subgraph STEP5 ["第 5 步 — 验证修复"]
+        J["python scan.py --full --email your@real.address"]
+    end
+
+    J --> K([✅ CLEAN])
+```
 
 ### 第 0 步 — 立即阻止新的泄露（最优先执行）
 
@@ -336,10 +487,10 @@ git push --force-with-lease origin --all
 
 | 情况 | 推荐方案 |
 |---|---|
-| 个人仓库，无协作者 | 方案 B（彻底重写） |
-| 团队仓库，有活跃协作者 | 先用方案 A；在代码冻结期协调执行方案 B |
-| 已归档 / 只读仓库 | 方案 A（安全，不影响协作） |
-| 邮件已扩散到大量 Fork | 方案 A（Fork 已无法控制） |
+| 个人仓库，无协作者 | **方案 B**（彻底重写） |
+| 团队仓库，有活跃协作者 | 先用**方案 A**；在代码冻结期协调执行方案 B |
+| 已归档 / 只读仓库 | **方案 A**（安全，不影响协作） |
+| 邮件已扩散到大量 Fork | **方案 A**（Fork 已无法控制） |
 
 ---
 
@@ -386,7 +537,7 @@ python fix.py --rewrite
 
 ---
 
-## 安全邮件模式（不会被标记）
+## 🛡️ 安全邮件模式（不会被标记）
 
 | 模式 | 示例 |
 |---|---|
@@ -399,7 +550,7 @@ python fix.py --rewrite
 
 ---
 
-## API 速率限制
+## ⏱️ API 速率限制
 
 使用 PAT 时，GitHub API 允许每小时 **5,000 次请求**。
 扫描器会自动处理速率限制（通过读取 `X-RateLimit-Reset` 自动等待）。
@@ -407,12 +558,14 @@ python fix.py --rewrite
 
 ---
 
-## 自检说明
+## 🔄 自检说明
 
 本仓库的 GitHub Actions 工作流使用 `41898282+github-actions[bot]@users.noreply.github.com` 进行所有提交——不会触发自身的扫描器。
 
 ---
 
-## 许可证
+## 📄 许可证
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 MIT

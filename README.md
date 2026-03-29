@@ -2,15 +2,53 @@
 
 **Language / 语言 / 言語:** English | [中文](README.zh.md) | [日本語](README.ja.md)
 
+---
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.12-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![GitHub Actions](https://github.com/long-910/github_leak_check/actions/workflows/scan.yml/badge.svg)](https://github.com/long-910/github_leak_check/actions/workflows/scan.yml)
+[![GitHub release](https://img.shields.io/github/v/release/long-910/github_leak_check?color=green)](https://github.com/long-910/github_leak_check/releases)
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-Email%20Leak%20Check-blue?logo=github)](https://github.com/marketplace/actions/github-email-leak-check)
+
 Scan GitHub commits, file contents, and user profiles for non-`noreply` email addresses — and display the result as a live badge on your GitHub profile.
 
 <!-- Status card — auto-updated daily by GitHub Actions -->
 <!-- Replace USERNAME with your GitHub username after forking -->
 <!-- ![Scan Status](https://raw.githubusercontent.com/USERNAME/github_leak_check/main/results/card.svg) -->
 
+> **Status card preview**
+>
+> | Clean | Leaks Found | Rate Limited | Error |
+> |:---:|:---:|:---:|:---:|
+> | ![clean](https://img.shields.io/badge/Email%20Leak-CLEAN-brightgreen) | ![leaks](https://img.shields.io/badge/Email%20Leak-LEAKS__FOUND-red) | ![ratelimit](https://img.shields.io/badge/Email%20Leak-RATE__LIMITED-blueviolet) | ![error](https://img.shields.io/badge/Email%20Leak-ERROR-orange) |
+
 ---
 
-## Background & motivation
+## 🔍 How it works
+
+```mermaid
+flowchart TD
+    A([🚀 Start scan.py]) --> B{Previous\nsummary.json?}
+    B -->|Yes| C[⏩ Incremental scan\nnew commits only]
+    B -->|No / --full| D[🔄 Full scan\nall commits]
+    C --> E
+    D --> E[👤 Scan profile email]
+    E --> F[📦 List repositories\nexclude forks by default]
+    F --> G[🔎 Scan commits\nauthor.email + committer.email]
+    G --> H{File scan\nenabled?}
+    H -->|Yes| I[📄 Scan source files\nREADME, package.json…]
+    H -->|No| J
+    I --> J[📊 Aggregate results]
+    J --> K{Leaks\nfound?}
+    K -->|Yes 🔴| L[leaks.json\nsummary.json\nred card.svg]
+    K -->|No 🟢| M[summary.json\ngreen card.svg]
+    L --> N([Exit 1])
+    M --> O([Exit 0])
+```
+
+---
+
+## 📖 Background & motivation
 
 ### "I have Keep my email addresses private — so why am I getting GitHub-related spam?"
 
@@ -34,23 +72,29 @@ Bots continuously scrape GitHub's commit API and search index. A single commit w
 
 ---
 
-## What it does
+## ✨ What it does
 
-1. **Commit scan** — checks every commit's `author.email` and `committer.email` across all your repos
-2. **File scan** — searches README, package.json, pyproject.toml, etc. for email-like patterns
-3. **Profile scan** — checks if your public GitHub profile has an email set
-4. Flags anything that isn't a `@users.noreply.github.com` (or other bot/noreply) address
-5. **Incremental** — on repeat runs, only commits after the previous scan's timestamp are checked
-6. **Forks excluded by default** — forked repos are skipped unless `--include-forks` is specified
+| # | Feature | Details |
+|---|---|---|
+| 1 | **Commit scan** | Checks every commit's `author.email` and `committer.email` across all your repos |
+| 2 | **File scan** | Searches README, package.json, pyproject.toml, etc. for email-like patterns |
+| 3 | **Profile scan** | Checks if your public GitHub profile has an email set |
+| 4 | **Smart filter** | Flags anything that isn't a `@users.noreply.github.com` or other bot/noreply address |
+| 5 | **Incremental** | On repeat runs, only commits after the previous scan's timestamp are checked |
+| 6 | **Fork-safe** | Forked repos are skipped unless `--include-forks` is specified |
 
-Results are stored as:
-- `results/summary.json` — aggregated counts, **no real emails** (committed); includes `since` field showing the scan window
-- `results/card.svg` — status card for embedding (committed)
-- `results/leaks.json` — full details with real addresses (**gitignored, never committed**)
+**Output files:**
+
+```
+results/
+├── summary.json   ← aggregated counts, no real emails (committed to repo)
+├── card.svg       ← embeddable status card (committed to repo)
+└── leaks.json     ← full details with real addresses (gitignored, never committed)
+```
 
 ---
 
-## Use as a GitHub Action
+## ⚡ Use as a GitHub Action
 
 Add to any repository's workflow in two lines:
 
@@ -67,15 +111,15 @@ Add to any repository's workflow in two lines:
 
 | Input | Required | Default | Description |
 |---|---|---|---|
-| `github-token` | Yes | — | PAT with `repo` + `read:user` scopes |
-| `username` | No | repo owner | GitHub username to scan |
-| `target-emails` | No | _(all)_ | Comma-separated addresses to watch |
-| `max-commits` | No | `500` | Max commits per repo |
-| `include-forks` | No | `false` | Also scan forked repos |
-| `no-files` | No | `false` | Skip file content scan |
-| `full-scan` | No | `false` | Ignore previous scan timestamp |
-| `max-rate-wait` | No | `60` | Abort if rate-limit wait > N seconds |
-| `output-dir` | No | `results` | Output directory |
+| `github-token` | ✅ | — | PAT with `repo` + `read:user` scopes |
+| `username` | — | repo owner | GitHub username to scan |
+| `target-emails` | — | _(all)_ | Comma-separated addresses to watch |
+| `max-commits` | — | `500` | Max commits per repo |
+| `include-forks` | — | `false` | Also scan forked repos |
+| `no-files` | — | `false` | Skip file content scan |
+| `full-scan` | — | `false` | Ignore previous scan timestamp |
+| `max-rate-wait` | — | `60` | Abort if rate-limit wait > N seconds |
+| `output-dir` | — | `results` | Output directory |
 
 ### Outputs
 
@@ -133,7 +177,15 @@ jobs:
 
 ---
 
-## Setup (self-hosted / fork)
+## 🛠️ Setup (self-hosted / fork)
+
+```mermaid
+flowchart LR
+    A([1. Fork repo]) --> B([2. Create PAT])
+    B --> C([3. Add secrets])
+    C --> D([4. Enable Actions])
+    D --> E([5. Embed card])
+```
 
 ### 1. Fork this repo
 
@@ -157,11 +209,11 @@ In your fork: **Settings → Secrets and variables → Actions → New repositor
 
 | Secret name | Required | Value |
 |---|---|---|
-| `GH_PAT` | Yes | The token from step 2 |
-| `TARGET_EMAILS` | No | Comma-separated addresses to watch, e.g. `you@work.com,old@isp.net` |
+| `GH_PAT` | ✅ | The token from step 2 |
+| `TARGET_EMAILS` | — | Comma-separated addresses to watch, e.g. `you@work.com,old@isp.net` |
 
-If `TARGET_EMAILS` is not set, the scanner flags **all** non-noreply addresses found in your repos.
-If it is set, only those specific addresses are reported.
+> If `TARGET_EMAILS` is not set, the scanner flags **all** non-noreply addresses.
+> If it is set, only those specific addresses are reported.
 
 ### 4. Enable Actions
 
@@ -181,7 +233,7 @@ Replace `USERNAME` with your actual GitHub username.
 
 ---
 
-## Run locally
+## 💻 Run locally
 
 First, install dependencies:
 
@@ -269,7 +321,60 @@ python generate_card.py
 
 ---
 
-## What to do when a leak is detected
+## 🚨 What to do when a leak is detected
+
+```mermaid
+flowchart TD
+    A([Leak detected!]) --> B
+
+    subgraph STEP0 ["Step 0 — Stop new leaks first"]
+        B[Enable GitHub privacy settings\nUpdate local git config]
+    end
+
+    STEP0 --> C
+
+    subgraph STEP1 ["Step 1 — Find your noreply address"]
+        C["Format: ID+USERNAME@users.noreply.github.com"]
+    end
+
+    STEP1 --> D{Where\nis the leak?}
+
+    D -->|Profile| E
+
+    subgraph STEP2 ["Step 2 — Fix profile"]
+        E[GitHub Settings → Profile\nSet Public email to None]
+    end
+
+    D -->|Source files| F
+
+    subgraph STEP3 ["Step 3 — Fix files"]
+        F["python fix.py\ngit commit && git push"]
+    end
+
+    D -->|Commit history| G{Team /\narchived repo?}
+    G -->|No| H
+
+    subgraph STEP4B ["Step 4-B — git filter-repo (permanent)"]
+        H["python fix.py --rewrite\ngit push --force-with-lease"]
+    end
+
+    G -->|Yes| I
+
+    subgraph STEP4A ["Step 4-A — .mailmap (safe)"]
+        I["python fix.py\ngit add .mailmap && git push"]
+    end
+
+    E --> J
+    F --> J
+    H --> J
+    I --> J
+
+    subgraph STEP5 ["Step 5 — Verify"]
+        J["python scan.py --full --email your@real.address"]
+    end
+
+    J --> K([✅ CLEAN])
+```
 
 ### Step 0 — Stop new leaks immediately (do this first)
 
@@ -384,10 +489,10 @@ git push --force-with-lease origin --all
 
 | Situation | Recommendation |
 |---|---|
-| Personal repo, no collaborators | Option B (full rewrite) |
-| Team repo, active collaborators | Option A first; coordinate Option B during a freeze window |
-| Archived / read-only repo | Option A (safe, no disruption) |
-| Email already in many forks | Option A (forks are out of your control anyway) |
+| Personal repo, no collaborators | **Option B** (full rewrite) |
+| Team repo, active collaborators | **Option A** first; coordinate Option B during a freeze window |
+| Archived / read-only repo | **Option A** (safe, no disruption) |
+| Email already in many forks | **Option A** (forks are out of your control anyway) |
 
 ---
 
@@ -434,7 +539,7 @@ python fix.py --rewrite
 
 ---
 
-## Safe email patterns (not flagged)
+## 🛡️ Safe email patterns (not flagged)
 
 | Pattern | Example |
 |---|---|
@@ -447,7 +552,7 @@ Everything else is flagged as a potential leak.
 
 ---
 
-## Rate limits
+## ⏱️ Rate limits
 
 With a PAT the GitHub API allows **5,000 requests/hour**.
 The scanner handles rate limiting automatically (waits on `X-RateLimit-Reset`).
@@ -455,12 +560,14 @@ Large accounts (100+ repos, thousands of commits) may need multiple runs or a hi
 
 ---
 
-## Self-check
+## 🔄 Self-check
 
 This repo's own GitHub Actions workflow uses `41898282+github-actions[bot]@users.noreply.github.com` for all commits — it won't trigger its own scanner.
 
 ---
 
-## License
+## 📄 License
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 MIT

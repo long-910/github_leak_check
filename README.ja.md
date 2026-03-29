@@ -2,15 +2,53 @@
 
 **Language / 语言 / 言語:** [English](README.md) | [中文](README.zh.md) | 日本語
 
+---
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.12-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![GitHub Actions](https://github.com/long-910/github_leak_check/actions/workflows/scan.yml/badge.svg)](https://github.com/long-910/github_leak_check/actions/workflows/scan.yml)
+[![GitHub release](https://img.shields.io/github/v/release/long-910/github_leak_check?color=green)](https://github.com/long-910/github_leak_check/releases)
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-Email%20Leak%20Check-blue?logo=github)](https://github.com/marketplace/actions/github-email-leak-check)
+
 GitHub のコミット履歴・ファイル内容・プロフィールから `noreply` 以外のメールアドレスを検出し、結果をライブバッジとして GitHub プロフィールに表示します。
 
 <!-- ステータスカード — GitHub Actions が毎日自動更新 -->
 <!-- USERNAME をあなたの GitHub ユーザー名に置き換えてコメントアウトを解除 -->
 <!-- ![スキャン状態](https://raw.githubusercontent.com/USERNAME/github_leak_check/main/results/card.svg) -->
 
+> **ステータスカード プレビュー**
+>
+> | 安全 | 漏洩あり | レート制限 | エラー |
+> |:---:|:---:|:---:|:---:|
+> | ![clean](https://img.shields.io/badge/Email%20Leak-CLEAN-brightgreen) | ![leaks](https://img.shields.io/badge/Email%20Leak-LEAKS__FOUND-red) | ![ratelimit](https://img.shields.io/badge/Email%20Leak-RATE__LIMITED-blueviolet) | ![error](https://img.shields.io/badge/Email%20Leak-ERROR-orange) |
+
 ---
 
-## 背景・作成動機
+## 🔍 動作の仕組み
+
+```mermaid
+flowchart TD
+    A([🚀 scan.py 起動]) --> B{前回の\nsummary.json?}
+    B -->|あり| C[⏩ 差分スキャン\n新規コミットのみ]
+    B -->|なし / --full| D[🔄 全量スキャン\n全コミット対象]
+    C --> E
+    D --> E[👤 プロフィールのメールをスキャン]
+    E --> F[📦 リポジトリ一覧取得\nデフォルトでフォーク除外]
+    F --> G[🔎 コミットをスキャン\nauthor.email + committer.email]
+    G --> H{ファイル\nスキャン有効?}
+    H -->|はい| I[📄 ソースファイルをスキャン\nREADME, package.json…]
+    H -->|いいえ| J
+    I --> J[📊 結果を集計]
+    J --> K{漏洩を\n検出?}
+    K -->|あり 🔴| L[leaks.json\nsummary.json\n赤い card.svg]
+    K -->|なし 🟢| M[summary.json\n緑の card.svg]
+    L --> N([終了コード 1])
+    M --> O([終了コード 0])
+```
+
+---
+
+## 📖 背景・作成動機
 
 ### 「メールアドレスを非公開にしているのに、GitHub 関連の迷惑メールが増えてきた…」
 
@@ -34,23 +72,29 @@ GitHub の **"Keep my email addresses private"**（Settings → Emails）を有�
 
 ---
 
-## 機能
+## ✨ 機能
 
-1. **コミットスキャン** — すべてのリポジトリの各コミットに含まれる `author.email` と `committer.email` を確認
-2. **ファイルスキャン** — README・package.json・pyproject.toml などのファイル内からメールアドレスのパターンを検索
-3. **プロフィールスキャン** — GitHub の公開プロフィールにメールアドレスが設定されていないか確認
-4. `@users.noreply.github.com`（および他の bot/noreply アドレス）以外のすべてのアドレスを潜在的な漏洩として報告
-5. **差分スキャン** — 2回目以降は前回スキャン時刻以降のコミットのみを対象にする
-6. **フォークをデフォルト除外** — `--include-forks` を指定しない限り、フォークしたリポジトリはスキップされる
+| # | 機能 | 説明 |
+|---|---|---|
+| 1 | **コミットスキャン** | すべてのリポジトリの各コミットに含まれる `author.email` と `committer.email` を確認 |
+| 2 | **ファイルスキャン** | README・package.json・pyproject.toml などのファイル内からメールアドレスのパターンを検索 |
+| 3 | **プロフィールスキャン** | GitHub の公開プロフィールにメールアドレスが設定されていないか確認 |
+| 4 | **スマートフィルタ** | `@users.noreply.github.com` 以外のすべてのアドレスを潜在的な漏洩として報告 |
+| 5 | **差分スキャン** | 2回目以降は前回スキャン時刻以降のコミットのみを対象にする |
+| 6 | **フォークをデフォルト除外** | `--include-forks` を指定しない限り、フォークしたリポジトリはスキップされる |
 
-出力ファイル：
-- `results/summary.json` — 集計のみ、**実メールアドレスなし**（コミット対象）；`since` フィールドで今回のスキャン範囲を記録
-- `results/card.svg` — プロフィール埋め込み用ステータスカード（コミット対象）
-- `results/leaks.json` — 実アドレスを含む詳細データ（**.gitignore 済み、絶対にコミットしない**）
+**出力ファイル：**
+
+```
+results/
+├── summary.json   ← 集計のみ、実メールアドレスなし（コミット対象）
+├── card.svg       ← プロフィール埋め込み用ステータスカード（コミット対象）
+└── leaks.json     ← 実アドレスを含む詳細データ（.gitignore 済み、絶対コミットしない）
+```
 
 ---
 
-## GitHub Action として使う
+## ⚡ GitHub Action として使う
 
 任意のリポジトリのワークフローに2行で組み込めます：
 
@@ -67,15 +111,15 @@ GitHub の **"Keep my email addresses private"**（Settings → Emails）を有�
 
 | パラメータ | 必須 | デフォルト | 説明 |
 |---|---|---|---|
-| `github-token` | 必須 | — | `repo` + `read:user` スコープの PAT |
-| `username` | 任意 | リポジトリオーナー | スキャン対象の GitHub ユーザー名 |
-| `target-emails` | 任意 | _(すべて)_ | 監視するアドレス（カンマ区切り） |
-| `max-commits` | 任意 | `500` | リポジトリごとの最大スキャンコミット数 |
-| `include-forks` | 任意 | `false` | フォークリポジトリも含める |
-| `no-files` | 任意 | `false` | ファイル内容スキャンをスキップ |
-| `full-scan` | 任意 | `false` | 前回のスキャン時刻を無視して全スキャン |
-| `max-rate-wait` | 任意 | `60` | N秒超の待機が必要なら中止 |
-| `output-dir` | 任意 | `results` | 出力ディレクトリ |
+| `github-token` | ✅ | — | `repo` + `read:user` スコープの PAT |
+| `username` | — | リポジトリオーナー | スキャン対象の GitHub ユーザー名 |
+| `target-emails` | — | _(すべて)_ | 監視するアドレス（カンマ区切り） |
+| `max-commits` | — | `500` | リポジトリごとの最大スキャンコミット数 |
+| `include-forks` | — | `false` | フォークリポジトリも含める |
+| `no-files` | — | `false` | ファイル内容スキャンをスキップ |
+| `full-scan` | — | `false` | 前回のスキャン時刻を無視して全スキャン |
+| `max-rate-wait` | — | `60` | N秒超の待機が必要なら中止 |
+| `output-dir` | — | `results` | 出力ディレクトリ |
 
 ### 出力
 
@@ -85,9 +129,63 @@ GitHub の **"Keep my email addresses private"**（Settings → Emails）を有�
 | `leak-count` | 検出した漏洩の件数 |
 | `exit-code` | `0` クリーン · `1` 漏洩あり · `2` レート制限 |
 
+### 完全なワークフロー例
+
+```yaml
+name: Email Leak Check
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run scan
+        id: scan
+        uses: long-910/github_leak_check@v1
+        with:
+          github-token:  ${{ secrets.GH_PAT }}
+          target-emails: ${{ secrets.TARGET_EMAILS }}
+          max-rate-wait: '60'
+
+      - name: Cancel if rate limited
+        if: steps.scan.outputs.exit-code == '2'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh run cancel "${{ github.run_id }}"
+
+      - name: Commit results
+        if: steps.scan.outputs.exit-code != '2'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add results/summary.json results/card.svg
+          git diff --staged --quiet || \
+            git commit -m "chore: update scan results [skip ci]" && git push
+```
+
 ---
 
-## セットアップ（セルフホスト / Fork）
+## 🛠️ セットアップ（セルフホスト / Fork）
+
+```mermaid
+flowchart LR
+    A([1. リポジトリをFork]) --> B([2. PAT を作成])
+    B --> C([3. Secrets を登録])
+    C --> D([4. Actions を有効化])
+    D --> E([5. カードを埋め込む])
+```
 
 ### 1. このリポジトリをフォーク
 
@@ -111,11 +209,11 @@ GitHub Actions があなたの身元で実行されるよう、自分のアカ�
 
 | シークレット名 | 必須 | 値 |
 |---|---|---|
-| `GH_PAT` | 必須 | 手順 2 で作成したトークン |
-| `TARGET_EMAILS` | 任意 | 監視するメールアドレス（カンマ区切り）例：`you@work.com,old@isp.net` |
+| `GH_PAT` | ✅ | 手順 2 で作成したトークン |
+| `TARGET_EMAILS` | — | 監視するメールアドレス（カンマ区切り）例：`you@work.com,old@isp.net` |
 
-`TARGET_EMAILS` を設定しない場合、スキャナーはリポジトリ内の**すべての**非 noreply アドレスを報告します。
-設定した場合は、指定したアドレスだけを検出対象にします。
+> `TARGET_EMAILS` を設定しない場合、スキャナーはリポジトリ内の**すべての**非 noreply アドレスを報告します。
+> 設定した場合は、指定したアドレスだけを検出対象にします。
 
 ### 4. Actions を有効化
 
@@ -135,7 +233,7 @@ Actions タブから手動でトリガーすることも可能です。
 
 ---
 
-## ローカルで実行
+## 💻 ローカルで実行
 
 まず依存パッケージをインストールします：
 
@@ -223,7 +321,60 @@ python generate_card.py
 
 ---
 
-## 漏洩が見つかったときの対処法
+## 🚨 漏洩が見つかったときの対処法
+
+```mermaid
+flowchart TD
+    A([漏洩を検出!]) --> B
+
+    subgraph STEP0 ["ステップ 0 — まず新たな漏洩を止める"]
+        B[GitHub のプライバシー設定を有効化\nローカルの git config を更新]
+    end
+
+    STEP0 --> C
+
+    subgraph STEP1 ["ステップ 1 — noreply アドレスを確認"]
+        C["形式：ID+USERNAME@users.noreply.github.com"]
+    end
+
+    STEP1 --> D{漏洩の\n場所は?}
+
+    D -->|プロフィール| E
+
+    subgraph STEP2 ["ステップ 2 — プロフィールを修正"]
+        E[GitHub Settings → Profile\nPublic email を None に変更]
+    end
+
+    D -->|ソースファイル| F
+
+    subgraph STEP3 ["ステップ 3 — ファイルを修正"]
+        F["python fix.py\ngit commit && git push"]
+    end
+
+    D -->|コミット履歴| G{チームリポジトリ\nまたはアーカイブ?}
+    G -->|いいえ| H
+
+    subgraph STEP4B ["ステップ 4-B — git filter-repo（永続的な修正）"]
+        H["python fix.py --rewrite\ngit push --force-with-lease"]
+    end
+
+    G -->|はい| I
+
+    subgraph STEP4A ["ステップ 4-A — .mailmap（安全な方法）"]
+        I["python fix.py\ngit add .mailmap && git push"]
+    end
+
+    E --> J
+    F --> J
+    H --> J
+    I --> J
+
+    subgraph STEP5 ["ステップ 5 — 修正を確認"]
+        J["python scan.py --full --email your@real.address"]
+    end
+
+    J --> K([✅ CLEAN])
+```
 
 ### ステップ 0 — まず新たな漏洩を止める（最優先）
 
@@ -336,10 +487,10 @@ git push --force-with-lease origin --all
 
 | 状況 | 推奨 |
 |---|---|
-| 個人リポジトリ・共同作業者なし | 方法 B（完全書き換え） |
-| チームリポジトリ・共同作業者あり | まず方法 A → コードフリーズ期間中に方法 B を調整実施 |
-| アーカイブ済み / 読み取り専用 | 方法 A（安全・影響なし） |
-| 多数の Fork にすでに拡散している | 方法 A（Fork は制御できないため） |
+| 個人リポジトリ・共同作業者なし | **方法 B**（完全書き換え） |
+| チームリポジトリ・共同作業者あり | まず**方法 A** → コードフリーズ期間中に方法 B を調整実施 |
+| アーカイブ済み / 読み取り専用 | **方法 A**（安全・影響なし） |
+| 多数の Fork にすでに拡散している | **方法 A**（Fork は制御できないため） |
 
 ---
 
@@ -375,7 +526,7 @@ python fix.py --dry-run
 python fix.py --rewrite
 ```
 
-**fix.py の修正ステップ：**
+**fix.py の修復ステップ：**
 
 | ステップ | 内容 | 安全性 |
 |---|---|---|
@@ -386,7 +537,7 @@ python fix.py --rewrite
 
 ---
 
-## 安全と判定されるメールパターン（フラグなし）
+## 🛡️ 安全と判定されるメールパターン（フラグなし）
 
 | パターン | 例 |
 |---|---|
@@ -399,7 +550,7 @@ python fix.py --rewrite
 
 ---
 
-## レート制限
+## ⏱️ レート制限
 
 PAT 使用時の GitHub API 制限は **5,000 リクエスト/時間** です。
 スキャナーはレート制限を自動で処理します（`X-RateLimit-Reset` を読み取って自動待機）。
@@ -407,12 +558,14 @@ PAT 使用時の GitHub API 制限は **5,000 リクエスト/時間** です。
 
 ---
 
-## 自己チェック
+## 🔄 自己チェック
 
 このリポジトリの GitHub Actions ワークフローはすべてのコミットに `41898282+github-actions[bot]@users.noreply.github.com` を使用しており、自身のスキャナーに検出されることはありません。
 
 ---
 
-## ライセンス
+## 📄 ライセンス
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 MIT
