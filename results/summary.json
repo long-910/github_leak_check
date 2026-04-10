@@ -1,10 +1,10 @@
 {
   "username": "long-910",
-  "scanned_at": "2026-04-09T04:03:18.245779+00:00",
-  "since": "2026-04-08T04:04:39.154279+00:00",
+  "scanned_at": "2026-04-10T04:07:58.641954+00:00",
+  "since": "2026-04-09T04:03:18.245779+00:00",
   "target_email_count": 1,
   "repos_scanned": 39,
-  "commits_scanned": 1,
+  "commits_scanned": 2,
   "files_scanned": 772,
   "commit_leak_keys": [
     "12a0189584a60996",
