@@ -79,7 +79,7 @@
   <!-- Footer -->
   <text x="20" y="196"
         font-family="&apos;Segoe UI&apos;, system-ui, -apple-system, sans-serif"
-        font-size="11" fill="#484f58">Last scan: 2026-08-03 06:28 UTC</text>
+        font-size="11" fill="#484f58">Last scan: 2026-08-04 05:53 UTC</text>
   <text x="440" y="196"
         font-family="&apos;Segoe UI&apos;, system-ui, -apple-system, sans-serif"
         font-size="11" fill="#484f58" text-anchor="end">Auto-updated by GitHub Actions</text>
